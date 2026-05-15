@@ -3,6 +3,8 @@ package io.github.kusoroadeolu.fstack;
 
 import io.github.kusoroadeolu.fstack.ConcurrentStack.ThreadInfo;
 
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerArray;
@@ -38,6 +40,17 @@ import static io.github.kusoroadeolu.fstack.ConcurrentStack.Operation.PUSH;
 * If we fail in either collision, that means we were delayed or too slow and another object has collided with that pop operation,
 *
 * */
+
+
+/*
+* Some extra notes
+The collision array, in a sense helps and doesn't help, though context matters,
+*  if there's too much contention on the collision array(either when equal operations collide too often or a specific index in the array gets hammered
+* a lot meaning threads overlap a lot so only few threads make progress while others wait idly, so other indexes are just left empty)
+* and little on the stack, we're basically reinventing the same problem just more complex.
+* The collision array helps in the sense when there's contention on the head of the stack and rather than just backing off and doing nothing useful,
+* we shift that contention to a different structure where threads can possibly make progress rather than waiting idly
+* */
 public class EliminationStack<T> {
 
     private final ConcurrentStack<T> stack;
@@ -56,7 +69,6 @@ public class EliminationStack<T> {
         for (int i = 0; i < NCPU_HALVED; ++i) {
             collisionArray.set(i, EMPTY);
         }
-
         id = ThreadLocal.withInitial(() -> new int[]{counter.getAndIncrement()});
     }
 
@@ -101,7 +113,7 @@ public class EliminationStack<T> {
                 return; //We've been collided with
 
             if (s.push(ourInfo)) return;
-            l.setRelease(idx, ourInfo);
+            l.setRelease(idx, ourInfo); //Rewrite our info
         }
     }
 
