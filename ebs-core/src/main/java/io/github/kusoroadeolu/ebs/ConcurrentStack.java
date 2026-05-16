@@ -1,14 +1,17 @@
-package io.github.kusoroadeolu.fstack;
+package io.github.kusoroadeolu.ebs;
+
+import org.openjdk.jol.info.ClassLayout;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
-import static io.github.kusoroadeolu.fstack.ConcurrentStack.Node.EMPTY;
+import static io.github.kusoroadeolu.ebs.ConcurrentStack.Node.EMPTY;
 
 
+@SuppressWarnings("unchecked")
 public interface ConcurrentStack<T> {
-    boolean push(ThreadInfo<T> info);
-    boolean pop(ThreadInfo<T> info);
+    boolean push(T t);
+    T pop();
 
     @SuppressWarnings("unchecked")
     class Node<T> {
@@ -20,7 +23,7 @@ public interface ConcurrentStack<T> {
             this.value = value;
         }
 
-        //Backed by volatile write
+        //Backed by a release
         public void spNext(Node<T> next) {
             NEXT.set(this, next);
         }
@@ -49,11 +52,11 @@ public interface ConcurrentStack<T> {
     }
 
 
-    static class ThreadInfoPad {
+    class ThreadInfoPad {
         private long l1, l2, l3, l4, l5, l6, l7, l8, l9;
     }
 
-    static class ThreadInfoFields<T> extends ThreadInfoPad{
+    class ThreadInfoFields<T> extends ThreadInfoPad {
         final Operation op;
         final int idx;
         Node<T> node;
@@ -79,7 +82,7 @@ public interface ConcurrentStack<T> {
         }
     }
 
-    static class ThreadInfo<T> extends ThreadInfoFields<T> {
+    class ThreadInfo<T> extends ThreadInfoFields<T> {
         private long l1, l2, l3, l4, l5, l6, l7, l8, l9;
 
         public ThreadInfo(Operation op, int idx, T t) {
@@ -91,6 +94,9 @@ public interface ConcurrentStack<T> {
         POP, PUSH
     }
 
-
+    static void main() {
+        var s = ClassLayout.parseInstance(ThreadInfo.class).toPrintable();
+        System.out.println(s);
+    }
 
 }

@@ -1,4 +1,4 @@
-package io.github.kusoroadeolu.fstack;
+package io.github.kusoroadeolu.ebs;
 
 import org.jetbrains.lincheck.Lincheck;
 import org.junit.jupiter.api.Assertions;
@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -35,6 +37,35 @@ class LincheckTest {
 
 
             Assertions.assertNotNull(stack.pop());
+        });
+    }
+
+    @Test
+    public void noDuplicatePops() {
+        Lincheck.runConcurrentTest(() -> {
+            EliminationStack<Integer> stack = new EliminationStack<>();
+            Set<Integer> popped = ConcurrentHashMap.newKeySet();
+
+            stack.push(1); stack.push(2); stack.push(3);
+
+            Thread t1 = new Thread(() -> {
+                Integer val = stack.pop();
+                if (val != null) assertTrue(popped.add(val));
+            });
+
+            Thread t2 = new Thread(() -> {
+                Integer val = stack.pop();
+                if (val != null) assertTrue(popped.add(val));
+            });
+
+            t1.start(); t2.start();
+
+            try {
+                t1.join();
+                t2.join();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
         });
     }
 
