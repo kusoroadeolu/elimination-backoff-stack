@@ -31,6 +31,9 @@ WaitStrategyBench.twoThreads      PARK  thrpt   30  29.585 ± 1.006  ops/us
 * 1. 10 spins as a starting idling point is basically nothing, modern cpus blaze through it in pico seconds, so we're probably not even idling compared to a 100ns park
 * 2. To actually reach our max idle spin count of 200 (which is honestly still basically nothing compared to a 1000ns park), at best, we need to successfully get collided with (without failing any collisions we started) around 10 times
 * which is honestly basically  a long shot since threads are not deterministic
+
+
+However spinning for a large x times could lead to us burning CPU, so increasing the spin count
 * */
 public class WaitStrategyBench {
     private ConcurrentStack<Integer> stack;

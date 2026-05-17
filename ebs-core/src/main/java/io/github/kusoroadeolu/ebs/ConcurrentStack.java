@@ -51,23 +51,16 @@ public interface ConcurrentStack<T> {
         }
     }
 
-
-    class ThreadInfoPad {
-        private long l1, l2, l3, l4, l5, l6, l7, l8, l9;
-    }
-
-    class ThreadInfoFields<T> extends ThreadInfoPad {
+    class ThreadInfo<T>  {
         final Operation op;
         final int idx;
-         Node<T> node;
-
-        ThreadInfoFields(Operation op, int idx, T val) {
+        Node<T> node;
+        public ThreadInfo(int idx, T t, Operation op) {
             this.op = op;
             this.idx = idx;
-            if (val == null) this.node = (Node<T>) EMPTY;
-            else this.node = new Node<>(val);
+            if (t == null) this.node = (Node<T>) EMPTY;
+            else this.node = new Node<>(t);
         }
-
 
         public Operation op() {
             return op;
@@ -79,14 +72,6 @@ public interface ConcurrentStack<T> {
 
         public Node<T> node() {
             return node;
-        }
-    }
-
-    class ThreadInfo<T> extends ThreadInfoFields<T> {
-        private long l1, l2, l3, l4, l5, l6, l7, l8, l9;
-
-        public ThreadInfo(int idx, T t, Operation op) {
-            super(op, idx, t);
         }
     }
 
