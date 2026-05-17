@@ -59,7 +59,7 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
     private final AtomicReferenceArray<ThreadInfo<T>> locations;
     private final ThreadLocal<AdaptiveBackoffPolicy> policy;
     private static final int NCPU = Runtime.getRuntime().availableProcessors();
-    private static final int NCPU_HALVED = NCPU / 2;
+    private static final int NCPU_HALVED = NCPU / 4;
     private static final int EMPTY = -1;
 
     public EliminationStack(WaitStrategy strategy) {
@@ -81,9 +81,13 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
         var idx = p.idx;
         var wp = p.waitPolicy();
         var rp = p.rangePolicy();
+        var m = p.metrics;
 
         ThreadInfo<T> ourInfo = new ThreadInfo<>(idx, val, PUSH);
-        if (s.push(ourInfo)) return true;
+        if (s.push(ourInfo)) {
+            ++m.stackSuccesses;
+            return true;
+        }
         var l = locations;
         var ca = collisionArray;
         l.setRelease(idx, ourInfo); //Should make node immediately visible
@@ -100,16 +104,23 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
                     //Try to make ourselves unavailable
                     if (l.compareAndSet(idx, ourInfo, null)) {
                         //try to collide now
-                        if (tryCollide(ourInfo, theirInfo, l)) break;
+                        if (tryCollide(ourInfo, theirInfo, l)) {
+                            m.successfulCollisions++;
+                            break;
+                        }
                         else { //Else retry stack
                             if (s.push(ourInfo)) break;
                             rp.recordCollisionFailure(); //Failed to collide increase record range and decrease wait count
                             wp.decreaseWait();
                             l.setRelease(idx, ourInfo);
+                            m.failedCollisions++;
                             continue; //Immediately try and collide again,
                         }
 
-                    } else break; //If we can't make ourselves unavailable, another thread has collided with us, so we return
+                    } else {
+                        ++m.successfulCollisions;
+                        break; //If we can't make ourselves unavailable, another thread has collided with us, so we return
+                    }
 
                 } else {
                     if (theirInfo == null) rp.recordThreadAbsence(); //On thread absence
@@ -118,10 +129,16 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
 
             wp.idle();
 
-            if (l.getAcquire(idx) == null || !l.compareAndSet(idx, ourInfo, null))
+            if (l.getAcquire(idx) == null || !l.compareAndSet(idx, ourInfo, null)){
+                m.successfulCollisions++;
                 break; //We've been collided with
+            }
 
-            if (s.push(ourInfo)) return true;
+
+            if (s.push(ourInfo)) {
+                ++m.stackSuccesses;
+                return true;
+            }
             l.setRelease(idx, ourInfo); //Rewrite our info
         }
 
@@ -133,11 +150,16 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
         var s = stack;
         var p = policy.get();
         var idx = p.idx;
-        var wp = p.waitPolicy();
-        var rp = p.rangePolicy();
+        var m = p.metrics;
 
         ThreadInfo<T> ourInfo = new ThreadInfo<>(idx, null, POP);
-        if (s.pop(ourInfo)) return ourInfo.node().value;
+        if (s.pop(ourInfo)) {
+            m.stackSuccesses++;
+            return ourInfo.node().value;
+        }
+
+        var wp = p.waitPolicy();
+        var rp = p.rangePolicy();
         var l = locations;
         var ca = collisionArray;
         l.setRelease(idx, ourInfo); //Should make node immediately visible
@@ -151,18 +173,22 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
                 if (theirInfo != null && theirIdx == theirInfo.idx() && theirInfo.op() == PUSH) {
                     //Try to make ourselves unavailable
                     if (l.compareAndSet(idx, ourInfo, null)) {
-
                         //try to collide now
-                        if (tryCollide(ourInfo, theirInfo, l)) break;
+                        if (tryCollide(ourInfo, theirInfo, l)) {
+                            m.successfulCollisions++;
+                            break;
+                        }
                         else { //Else retry stack
                             if (s.pop(ourInfo)) break;
                             rp.recordCollisionFailure(); //Failed to collide increase record range and decrease wait count
                             wp.decreaseWait();
                             l.setRelease(idx, ourInfo);
+                            m.failedCollisions++;
                             continue; //Immediately try and collide again,
                         }
 
                     }else {
+                        m.successfulCollisions++;
                         popFinishCollide(ourInfo, l.getAcquire(idx), l);
                         break;
                     } //If we can't make ourselves unavailable, another thread has collided with us, so we finish colliding
@@ -176,15 +202,23 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
             if (!l.compareAndSet(idx, ourInfo, null)) {
                 var i = l.getAcquire(idx);
                 popFinishCollide(ourInfo,i , l);
+                m.successfulCollisions++;
                 break;
             } //We've been collided with
 
-            if (s.pop(ourInfo)) return ourInfo.node().value;
+            if (s.pop(ourInfo)) {
+                ++m.stackSuccesses;
+                return ourInfo.node().value;
+            }
             l.setRelease(idx, ourInfo);
         }
 
         wp.increaseWait();
         return ourInfo.node().value;
+    }
+
+    public Metrics getMetrics() {
+        return policy.get().metrics;
     }
 
 
@@ -230,6 +264,8 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
     }
 
 
+
+
     // Adaptive backoff
     /*
      * Back-off in space, we start with a factor which subsets our range to half the array
@@ -260,12 +296,14 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
         private final int idx;
         private final RangePolicy rangePolicy;
         private final WaitPolicy waitPolicy;
+        private final Metrics metrics;
 
 
         AdaptiveBackoffPolicy(WaitStrategy strategy, int idx) {
             this.idx = idx;
             this.waitPolicy = new WaitPolicy(strategy);
             this.rangePolicy = new RangePolicy();
+            this.metrics = new Metrics();
         }
 
         public WaitPolicy waitPolicy() {
@@ -371,8 +409,6 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
         }
 
     }
-
-
 
 
 

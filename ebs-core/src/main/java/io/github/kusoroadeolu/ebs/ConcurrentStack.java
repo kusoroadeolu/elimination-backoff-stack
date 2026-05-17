@@ -13,6 +13,18 @@ public interface ConcurrentStack<T> {
     boolean push(T t);
     T pop();
 
+    class Metrics {
+        public int successfulCollisions;
+        public int failedCollisions;
+        public int stackSuccesses;
+
+        public void reset() {
+            successfulCollisions = 0;
+            failedCollisions = 0;
+            stackSuccesses = 0;
+        }
+    }
+
     @SuppressWarnings("unchecked")
     class Node<T> {
         final T value;
