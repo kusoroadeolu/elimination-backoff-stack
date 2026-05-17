@@ -59,7 +59,7 @@ public interface ConcurrentStack<T> {
     class ThreadInfoFields<T> extends ThreadInfoPad {
         final Operation op;
         final int idx;
-        Node<T> node;
+         Node<T> node;
 
         ThreadInfoFields(Operation op, int idx, T val) {
             this.op = op;
@@ -85,7 +85,7 @@ public interface ConcurrentStack<T> {
     class ThreadInfo<T> extends ThreadInfoFields<T> {
         private long l1, l2, l3, l4, l5, l6, l7, l8, l9;
 
-        public ThreadInfo(Operation op, int idx, T t) {
+        public ThreadInfo(int idx, T t, Operation op) {
             super(op, idx, t);
         }
     }
