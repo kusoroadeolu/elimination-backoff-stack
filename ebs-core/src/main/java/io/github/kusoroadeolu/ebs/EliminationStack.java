@@ -52,10 +52,19 @@ The collision array alone, in a sense helps and doesn't help, though context mat
 * */
 
 // Based on the paper: http://www.inf.ufsc.br/~dovicchi/pos-ed/pos/artigos/p206-hendler.pdf
+
+//This version deviates from the paper a bit
+// Rather than a shared collision array, both push and pop operations have exclusive collision arrays
+// To prevent colliding to frequently with similar ops, push ops only write to the push array
+// and read from the pop array and vice versa. Later one we try to clear the position we wrote to using a cas,
+// to prevent clearing threads that might have written to that position since we last wrote
+// While this reduces frequent ops collision by almost 90% (from 122k to 3k),
+// it does come at the cost of an extra volatile write and acquire read in and out the loop
 public class EliminationStack<T> implements ConcurrentStack<T>{
 
     private final SimpleStack<T> stack;
-    private final AtomicIntegerArray collisionArray;
+    private final AtomicIntegerArray popCollisionArray;
+    private final AtomicIntegerArray pushCollisionArray;
     private final AtomicReferenceArray<ThreadInfo<T>> locations;
     private final ThreadLocal<AdaptiveBackoffPolicy> policy;
     private static final int NCPU = Runtime.getRuntime().availableProcessors();
@@ -65,11 +74,17 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
     public EliminationStack(WaitStrategy strategy) {
         var counter = new AtomicInteger(0);
         stack = new SimpleStack<>(); //A simple treiber stack
-        collisionArray = new AtomicIntegerArray(NCPU_HALVED); //Reduce by half to increase collision probability
+        popCollisionArray = new AtomicIntegerArray(NCPU_HALVED); //Reduce by half to increase collision probability
+        pushCollisionArray = new AtomicIntegerArray(NCPU_HALVED); //Reduce by half to increase collision probability
+
         locations = new AtomicReferenceArray<>(NCPU);
 
         for (int i = 0; i < NCPU_HALVED; ++i) {
-            collisionArray.set(i, EMPTY);
+            popCollisionArray.set(i, EMPTY);
+        }
+
+        for (int i = 0; i < NCPU_HALVED; ++i) {
+            pushCollisionArray.set(i, EMPTY);
         }
 
         policy = ThreadLocal.withInitial(() -> new AdaptiveBackoffPolicy(strategy, counter.getAndIncrement()));
@@ -89,13 +104,14 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
             return true;
         }
         var l = locations;
-        var ca = collisionArray;
+        var ourArr = pushCollisionArray;
+        var theirArr = popCollisionArray;
         l.setRelease(idx, ourInfo); //Should make node immediately visible
-
+        int pos;
 
         while (true) {
-            int pos = rp.calculatePos(); //random array collision position
-            int theirIdx = locationToCollide(ca, idx, pos);  //Location we're colliding with
+            pos = rp.calculatePos(); //random array collision position
+            int theirIdx = locationToCollide(ourArr, theirArr, idx, pos);  //Location we're colliding with
             if (theirIdx != EMPTY) {
                 var theirInfo = l.getAcquire(theirIdx); //Use an acquire read to ensure we always see the current node
 
@@ -150,6 +166,7 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
         }
 
         wp.increaseWait();
+        ourArr.compareAndSet(pos, idx, EMPTY);
         return true;
     }
 
@@ -168,11 +185,13 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
         var wp = p.waitPolicy();
         var rp = p.rangePolicy();
         var l = locations;
-        var ca = collisionArray;
+        var ourArr = popCollisionArray;
+        var theirArr = pushCollisionArray;
         l.setRelease(idx, ourInfo); //Should make node immediately visible
+        int pos;
         while (true) {
-            int pos = calculatePos(); //random collision position
-            int theirIdx = locationToCollide(ca, idx, pos);  //Location idx we're colliding with
+            pos = rp.calculatePos(); //random collision position
+            int theirIdx = locationToCollide(ourArr, theirArr, idx, pos);  //Location idx we're colliding with
             if (theirIdx != EMPTY) {
                 var theirInfo = l.getAcquire(theirIdx); //Use a get acquire read to ensure we always see the current node
 
@@ -226,6 +245,7 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
             l.setRelease(idx, ourInfo);
         }
 
+        ourArr.compareAndSet(pos, idx, EMPTY);
         wp.increaseWait();
         return ourInfo.node().value;
     }
@@ -234,14 +254,10 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
         return policy.get().metrics;
     }
 
-
-    int locationToCollide(AtomicIntegerArray arr, int ourIdx, int pos) {
-        return arr.getAndSet(pos, ourIdx);
-    }
-
-    //Bounded to location NCPU / 2
-    int calculatePos() {
-        return Math.abs(ThreadLocalRandom.current().nextInt() % NCPU_HALVED);
+    //Set our idx in pos, and the get the opp idx at pos
+    int locationToCollide(AtomicIntegerArray ours, AtomicIntegerArray opp ,int ourIdx, int pos) {
+        ours.setRelease(pos, ourIdx);
+        return opp.getAcquire(pos);
     }
 
     void popFinishCollide(ThreadInfo<T> ours, ThreadInfo<T> theirs, AtomicReferenceArray<ThreadInfo<T>> l) {

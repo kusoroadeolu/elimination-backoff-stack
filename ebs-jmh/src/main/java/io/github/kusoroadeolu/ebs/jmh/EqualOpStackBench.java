@@ -35,8 +35,9 @@ EqualOpStackBench.twoThreads      TREB  thrpt   30  14.534 ± 0.688  ops/us
 * Initially these results looked pretty impressive. I did decide to profile to look for any bottlenecks
 * While nothing looked suspicious on the CPU side, the memory side told a whole different story.
 * Thread info allocations used roughly around 100GB at 8 threads, which meant the GC was under pressure
-* Ideally while a simple object creation should not, I added some padding for thread info objects to prevent false sharing
+* Ideally while a simple object creation should not, I added some padding for thread info objects to prevent false sharing initially
 * in the "locations" array under high contention. I did suspect the possibility of high memory usage, just not to this level.
+*  Due to the high memory usage I removed the padding and the thrpt increased significantly
 *
 *Benchmark                        Mode  Cnt   Score   Error   Units
 EqualOpStackBench.eightThreads  thrpt   30  44.535 ± 2.372  ops/us
@@ -64,8 +65,31 @@ EqualOpStackBench.twoThreads:stackSuccesses          thrpt   30  1488073239.000 
 EqualOpStackBench.twoThreads:successfulCollisions    thrpt   30             ≈ 0               #
 EqualOpStackBench.twoThreads:threadAbsence           thrpt   30        3462.000               #
 *
+*
 * From the metrics, encountering similar operations is much more than thread absence in the elim array and us completing a successful elimination
 * I can redesign this for both pop and push to use separate elimination to ever prevent the issue of encountering similar operations in the elim array
+*
+*
+Benchmark                                             Mode  Cnt           Score   Error   Units
+EqualOpStackBench.eightThreads                       thrpt   30          44.122 ± 3.702  ops/us
+EqualOpStackBench.eightThreads:failedCollisions      thrpt   30        1787.000               #
+EqualOpStackBench.eightThreads:similarOps            thrpt   30       19524.000               #
+EqualOpStackBench.eightThreads:stackSuccesses        thrpt   30  1328904850.000               #
+EqualOpStackBench.eightThreads:successfulCollisions  thrpt   30      116204.000               #
+EqualOpStackBench.eightThreads:threadAbsence         thrpt   30       16810.000               #
+EqualOpStackBench.fourThreads                        thrpt   30          48.442 ± 1.998  ops/us
+EqualOpStackBench.fourThreads:failedCollisions       thrpt   30         559.000               #
+EqualOpStackBench.fourThreads:similarOps             thrpt   30        4847.000               #
+EqualOpStackBench.fourThreads:stackSuccesses         thrpt   30  1463214117.000               #
+EqualOpStackBench.fourThreads:successfulCollisions   thrpt   30       31912.000               #
+EqualOpStackBench.fourThreads:threadAbsence          thrpt   30        5209.000               #
+EqualOpStackBench.twoThreads                         thrpt   30          50.824 ± 2.100  ops/us
+EqualOpStackBench.twoThreads:failedCollisions        thrpt   30             ≈ 0               #
+EqualOpStackBench.twoThreads:similarOps              thrpt   30       11725.000               #
+EqualOpStackBench.twoThreads:stackSuccesses          thrpt   30  1557312212.000               #
+EqualOpStackBench.twoThreads:successfulCollisions    thrpt   30             ≈ 0               #
+EqualOpStackBench.twoThreads:threadAbsence           thrpt   30        7881.000               #
+* The number of similar operations does reduce significantly though across all threads, thrpt increased slightly
 * */
 public class EqualOpStackBench {
     private EliminationStack<Integer> stack;
