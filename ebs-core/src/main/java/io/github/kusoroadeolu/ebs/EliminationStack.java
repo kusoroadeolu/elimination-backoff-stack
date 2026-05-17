@@ -59,7 +59,7 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
     private final AtomicReferenceArray<ThreadInfo<T>> locations;
     private final ThreadLocal<AdaptiveBackoffPolicy> policy;
     private static final int NCPU = Runtime.getRuntime().availableProcessors();
-    private static final int NCPU_HALVED = NCPU / 4;
+    private static final int NCPU_HALVED = NCPU / 2;
     private static final int EMPTY = -1;
 
     public EliminationStack(WaitStrategy strategy) {
@@ -123,7 +123,14 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
                     }
 
                 } else {
-                    if (theirInfo == null) rp.recordThreadAbsence(); //On thread absence
+                    if (theirInfo == null) {
+                        rp.recordThreadAbsence(); //On thread absence
+                        m.threadAbsence++;
+                    }
+                    else if (theirInfo.op == PUSH) {
+                        m.similarOps++;
+                    }
+
                 }
             }
 
@@ -194,7 +201,13 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
                     } //If we can't make ourselves unavailable, another thread has collided with us, so we finish colliding
 
                 } else {
-                    if (theirInfo == null) rp.recordThreadAbsence(); //On thread absence
+                    if (theirInfo == null) {
+                        rp.recordThreadAbsence(); //On thread absence
+                        m.threadAbsence++;
+                    }
+                    else if (theirInfo.op == POP) {
+                        m.similarOps++;
+                    }
                 }
             }
 

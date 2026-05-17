@@ -44,34 +44,28 @@ EqualOpStackBench.fourThreads   thrpt   30  47.844 ± 2.001  ops/us
 EqualOpStackBench.twoThreads    thrpt   30  50.270 ± 1.824  ops/us
 *
 * //Elim array size = NPCU / 2
-* Benchmark                                             Mode  Cnt           Score   Error   Units
-EqualOpStackBench.eightThreads                       thrpt   30          44.566 ± 2.705  ops/us
-EqualOpStackBench.eightThreads:failedCollisions      thrpt   30         194.000               #
-EqualOpStackBench.eightThreads:stackSuccesses        thrpt   30  1344001504.000               #
-EqualOpStackBench.eightThreads:successfulCollisions  thrpt   30       59734.000               #
-EqualOpStackBench.fourThreads                        thrpt   30          46.974 ± 1.698  ops/us
-EqualOpStackBench.fourThreads:failedCollisions       thrpt   30         249.000               #
-EqualOpStackBench.fourThreads:stackSuccesses         thrpt   30  1419841496.000               #
-EqualOpStackBench.fourThreads:successfulCollisions   thrpt   30       19162.000               #
-EqualOpStackBench.twoThreads                         thrpt   30          48.411 ± 1.321  ops/us
-EqualOpStackBench.twoThreads:failedCollisions        thrpt   30             ≈ 0               #
-EqualOpStackBench.twoThreads:stackSuccesses          thrpt   30  1484469671.000               #
-EqualOpStackBench.twoThreads:successfulCollisions    thrpt   30             ≈ 0               #
-*
-* //Elim array size = NPCU / 4
 Benchmark                                             Mode  Cnt           Score   Error   Units
-EqualOpStackBench.eightThreads                       thrpt   30          45.398 ± 2.029  ops/us
-EqualOpStackBench.eightThreads:failedCollisions      thrpt   30         235.000               #
-EqualOpStackBench.eightThreads:stackSuccesses        thrpt   30  1367807803.000               #
-EqualOpStackBench.eightThreads:successfulCollisions  thrpt   30       76902.000               #
-EqualOpStackBench.fourThreads                        thrpt   30          47.463 ± 1.851  ops/us
-EqualOpStackBench.fourThreads:failedCollisions       thrpt   30         376.000               #
-EqualOpStackBench.fourThreads:stackSuccesses         thrpt   30  1433525126.000               #
-EqualOpStackBench.fourThreads:successfulCollisions   thrpt   30       26544.000               #
-EqualOpStackBench.twoThreads                         thrpt   30          49.273 ± 1.993  ops/us
+EqualOpStackBench.eightThreads                       thrpt   30          44.035 ± 2.125  ops/us
+EqualOpStackBench.eightThreads:failedCollisions      thrpt   30         190.000               #
+EqualOpStackBench.eightThreads:similarOps            thrpt   30      123711.000               #
+EqualOpStackBench.eightThreads:stackSuccesses        thrpt   30  1330838907.000               #
+EqualOpStackBench.eightThreads:successfulCollisions  thrpt   30       57820.000               #
+EqualOpStackBench.eightThreads:threadAbsence         thrpt   30       18830.000               #
+EqualOpStackBench.fourThreads                        thrpt   30          47.216 ± 2.088  ops/us
+EqualOpStackBench.fourThreads:failedCollisions       thrpt   30         242.000               #
+EqualOpStackBench.fourThreads:similarOps             thrpt   30       44831.000               #
+EqualOpStackBench.fourThreads:stackSuccesses         thrpt   30  1425514456.000               #
+EqualOpStackBench.fourThreads:successfulCollisions   thrpt   30       20012.000               #
+EqualOpStackBench.fourThreads:threadAbsence          thrpt   30       12863.000               #
+EqualOpStackBench.twoThreads                         thrpt   30          48.795 ± 1.476  ops/us
 EqualOpStackBench.twoThreads:failedCollisions        thrpt   30             ≈ 0               #
-EqualOpStackBench.twoThreads:stackSuccesses          thrpt   30  1499237123.000               #
+EqualOpStackBench.twoThreads:similarOps              thrpt   30       15964.000               #
+EqualOpStackBench.twoThreads:stackSuccesses          thrpt   30  1488073239.000               #
 EqualOpStackBench.twoThreads:successfulCollisions    thrpt   30             ≈ 0               #
+EqualOpStackBench.twoThreads:threadAbsence           thrpt   30        3462.000               #
+*
+* From the metrics, encountering similar operations is much more than thread absence in the elim array and us completing a successful elimination
+* I can redesign this for both pop and push to use separate elimination to ever prevent the issue of encountering similar operations in the elim array
 * */
 public class EqualOpStackBench {
     private EliminationStack<Integer> stack;
@@ -85,6 +79,8 @@ public class EqualOpStackBench {
         public int successfulCollisions;
         public int failedCollisions;
         public int stackSuccesses;
+        public int similarOps;
+        public int threadAbsence;
 
         static final AtomicInteger threadCounter = new AtomicInteger();
 
@@ -99,6 +95,8 @@ public class EqualOpStackBench {
             successfulCollisions = m.successfulCollisions;
             failedCollisions = m.failedCollisions;
             stackSuccesses = m.stackSuccesses;
+            threadAbsence = m.threadAbsence;
+            similarOps = m.similarOps;
             m.reset();
 
         }

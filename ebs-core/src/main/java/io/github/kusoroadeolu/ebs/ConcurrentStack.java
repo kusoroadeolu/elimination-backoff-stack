@@ -17,11 +17,16 @@ public interface ConcurrentStack<T> {
         public int successfulCollisions;
         public int failedCollisions;
         public int stackSuccesses;
+        public int threadAbsence;
+        public int similarOps;
+
 
         public void reset() {
             successfulCollisions = 0;
             failedCollisions = 0;
             stackSuccesses = 0;
+            threadAbsence = 0;
+            similarOps = 0;
         }
     }
 
