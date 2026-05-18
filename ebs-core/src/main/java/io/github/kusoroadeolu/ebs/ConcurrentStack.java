@@ -12,23 +12,26 @@ import static io.github.kusoroadeolu.ebs.ConcurrentStack.Node.EMPTY;
 public interface ConcurrentStack<T> {
     boolean push(T t);
     T pop();
-
-    class Metrics {
-        public int successfulCollisions;
-        public int failedCollisions;
-        public int stackSuccesses;
-        public int threadAbsence;
-        public int similarOps;
-
-
-        public void reset() {
-            successfulCollisions = 0;
-            failedCollisions = 0;
-            stackSuccesses = 0;
-            threadAbsence = 0;
-            similarOps = 0;
-        }
-    }
+//    default Metrics getMetrics() {
+//        return new Metrics();
+//    }
+//
+//    class Metrics {
+//        public int successfulCollisions;
+//        public int failedCollisions;
+//        public int stackSuccesses;
+//        public int threadAbsence;
+//        public int similarOps;
+//
+//
+//        public void reset() {
+//            successfulCollisions = 0;
+//            failedCollisions = 0;
+//            stackSuccesses = 0;
+//            threadAbsence = 0;
+//            similarOps = 0;
+//        }
+//    }
 
     @SuppressWarnings("unchecked")
     class Node<T> {

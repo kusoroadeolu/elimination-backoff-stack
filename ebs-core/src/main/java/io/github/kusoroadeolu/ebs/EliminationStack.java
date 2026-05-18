@@ -59,16 +59,16 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
     private final AtomicReferenceArray<ThreadInfo<T>> locations;
     private final ThreadLocal<AdaptiveBackoffPolicy> policy;
     private static final int NCPU = Runtime.getRuntime().availableProcessors();
-    private static final int NCPU_HALVED = NCPU;
+    private static final int C_ARR_SIZE = NCPU;
     private static final int EMPTY = -1;
 
     public EliminationStack(WaitStrategy strategy) {
         var counter = new AtomicInteger(0);
         stack = new SimpleStack<>(); //A simple treiber stack
-        collisionArray = new AtomicIntegerArray(NCPU_HALVED); //Reduce by half to increase collision probability
+        collisionArray = new AtomicIntegerArray(C_ARR_SIZE); //Reduce by half to increase collision probability
         locations = new AtomicReferenceArray<>(NCPU);
 
-        for (int i = 0; i < NCPU_HALVED; ++i) {
+        for (int i = 0; i < C_ARR_SIZE; ++i) {
             collisionArray.set(i, EMPTY);
         }
 
@@ -81,13 +81,9 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
         var idx = p.idx;
         var wp = p.waitPolicy();
         var rp = p.rangePolicy();
-        var m = p.metrics;
 
         ThreadInfo<T> ourInfo = new ThreadInfo<>(idx, val, PUSH);
-        if (s.push(ourInfo)) {
-            ++m.stackSuccesses;
-            return true;
-        }
+        if (s.push(ourInfo)) return true;
         var l = locations;
         var ca = collisionArray;
         l.setRelease(idx, ourInfo); //Should make node immediately visible
@@ -105,7 +101,6 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
                     if (l.compareAndSet(idx, ourInfo, null)) {
                         //try to collide now
                         if (tryCollide(ourInfo, theirInfo, l)) {
-                            m.successfulCollisions++;
                             break;
                         }
                         else { //Else retry stack
@@ -113,22 +108,14 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
                             rp.recordCollisionFailure(); //Failed to collide increase record range and decrease wait count
                             wp.decreaseWait();
                             l.setRelease(idx, ourInfo);
-                            m.failedCollisions++;
                             continue; //Immediately try and collide again,
                         }
 
-                    } else {
-                        ++m.successfulCollisions;
-                        break; //If we can't make ourselves unavailable, another thread has collided with us, so we return
-                    }
+                    } else break; //If we can't make ourselves unavailable, another thread has collided with us, so we return
 
                 } else {
                     if (theirInfo == null) {
                         rp.recordThreadAbsence(); //On thread absence
-                        m.threadAbsence++;
-                    }
-                    else if (theirInfo.op == PUSH) {
-                        m.similarOps++;
                     }
 
                 }
@@ -137,13 +124,11 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
             wp.idle();
 
             if (l.getAcquire(idx) == null || !l.compareAndSet(idx, ourInfo, null)){
-                m.successfulCollisions++;
                 break; //We've been collided with
             }
 
 
             if (s.push(ourInfo)) {
-                ++m.stackSuccesses;
                 return true;
             }
             l.setRelease(idx, ourInfo); //Rewrite our info
@@ -157,11 +142,9 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
         var s = stack;
         var p = policy.get();
         var idx = p.idx;
-        var m = p.metrics;
 
         ThreadInfo<T> ourInfo = new ThreadInfo<>(idx, null, POP);
         if (s.pop(ourInfo)) {
-            m.stackSuccesses++;
             return ourInfo.node().value;
         }
 
@@ -182,7 +165,6 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
                     if (l.compareAndSet(idx, ourInfo, null)) {
                         //try to collide now
                         if (tryCollide(ourInfo, theirInfo, l)) {
-                            m.successfulCollisions++;
                             break;
                         }
                         else { //Else retry stack
@@ -190,12 +172,10 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
                             rp.recordCollisionFailure(); //Failed to collide increase record range and decrease wait count
                             wp.decreaseWait();
                             l.setRelease(idx, ourInfo);
-                            m.failedCollisions++;
                             continue; //Immediately try and collide again,
                         }
 
                     }else {
-                        m.successfulCollisions++;
                         popFinishCollide(ourInfo, l.getAcquire(idx), l);
                         break;
                     } //If we can't make ourselves unavailable, another thread has collided with us, so we finish colliding
@@ -203,10 +183,6 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
                 } else {
                     if (theirInfo == null) {
                         rp.recordThreadAbsence(); //On thread absence
-                        m.threadAbsence++;
-                    }
-                    else if (theirInfo.op == POP) {
-                        m.similarOps++;
                     }
                 }
             }
@@ -215,14 +191,10 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
             if (!l.compareAndSet(idx, ourInfo, null)) {
                 var i = l.getAcquire(idx);
                 popFinishCollide(ourInfo,i , l);
-                m.successfulCollisions++;
                 break;
             } //We've been collided with
 
-            if (s.pop(ourInfo)) {
-                ++m.stackSuccesses;
-                return ourInfo.node().value;
-            }
+            if (s.pop(ourInfo)) return ourInfo.node().value;
             l.setRelease(idx, ourInfo);
         }
 
@@ -230,8 +202,11 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
         return ourInfo.node().value;
     }
 
-    public Metrics getMetrics() {
-        return policy.get().metrics;
+    public void clearArrays() {
+        for (int i = 0; i < NCPU; ++i) {
+            collisionArray.set(i, EMPTY);
+            locations.set(i, null);
+        }
     }
 
 
@@ -241,7 +216,7 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
 
     //Bounded to location NCPU / 2
     int calculatePos() {
-        return Math.abs(ThreadLocalRandom.current().nextInt() % NCPU_HALVED);
+        return Math.abs(ThreadLocalRandom.current().nextInt() % C_ARR_SIZE);
     }
 
     void popFinishCollide(ThreadInfo<T> ours, ThreadInfo<T> theirs, AtomicReferenceArray<ThreadInfo<T>> l) {
@@ -309,14 +284,12 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
         private final int idx;
         private final RangePolicy rangePolicy;
         private final WaitPolicy waitPolicy;
-        private final Metrics metrics;
 
 
         AdaptiveBackoffPolicy(WaitStrategy strategy, int idx) {
             this.idx = idx;
             this.waitPolicy = new WaitPolicy(strategy);
             this.rangePolicy = new RangePolicy();
-            this.metrics = new Metrics();
         }
 
         public WaitPolicy waitPolicy() {
@@ -345,11 +318,11 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
             successWaitCount = 0;
         }
 
-        static final int MIN_SPIN = 50;
-        static final int MAX_SPIN = 500;
+        static final int MIN_SPIN = 10;
+        static final int MAX_SPIN = 100;
 
-        static final int MIN_PARK = 300;
-        static final int MAX_PARK = 3000;
+        static final int MIN_PARK = 100;
+        static final int MAX_PARK = 1000;
 
         static final int LIMIT = 5;
 
@@ -398,7 +371,7 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
         void recordThreadAbsence() {
             if (++threadAbsence > LIMIT) {
                 rangeFactor = Math.max(0.1f, rangeFactor / 2);
-                range = Math.max(1, (int) (NCPU_HALVED * rangeFactor));
+                range = Math.max(1, (int) (C_ARR_SIZE * rangeFactor));
                threadAbsence = 0;
             }
         }
@@ -406,7 +379,7 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
         void recordCollisionFailure() {
             if (++collisionFailure > LIMIT) {
                 rangeFactor = Math.min(1f, rangeFactor * 2);
-                range = Math.max(1, (int) (NCPU_HALVED * rangeFactor));
+                range = Math.max(1, (int) (C_ARR_SIZE * rangeFactor));
                 collisionFailure = 0;
 
             }
@@ -414,10 +387,10 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
 
         int calculatePos() {
             //half = 1/2  =0; start = 1; end = (3 or 2.5) : 2
-            int mid = NCPU_HALVED / 2;
+            int mid = C_ARR_SIZE / 2;
             int half = range / 2;
             int start = Math.max(0, mid - half);
-            int end = Math.min(NCPU_HALVED - 1, mid + half);
+            int end = Math.min(C_ARR_SIZE - 1, mid + half);
             return start + Math.abs(ThreadLocalRandom.current().nextInt() % (end - start + 1));
         }
 
