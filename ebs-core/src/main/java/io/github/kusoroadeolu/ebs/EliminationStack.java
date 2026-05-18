@@ -59,7 +59,7 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
     private final AtomicReferenceArray<ThreadInfo<T>> locations;
     private final ThreadLocal<AdaptiveBackoffPolicy> policy;
     private static final int NCPU = Runtime.getRuntime().availableProcessors();
-    private static final int NCPU_HALVED = NCPU / 2;
+    private static final int NCPU_HALVED = NCPU;
     private static final int EMPTY = -1;
 
     public EliminationStack(WaitStrategy strategy) {
@@ -171,7 +171,7 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
         var ca = collisionArray;
         l.setRelease(idx, ourInfo); //Should make node immediately visible
         while (true) {
-            int pos = calculatePos(); //random collision position
+            int pos = rp.calculatePos(); //random collision position
             int theirIdx = locationToCollide(ca, idx, pos);  //Location idx we're colliding with
             if (theirIdx != EMPTY) {
                 var theirInfo = l.getAcquire(theirIdx); //Use a get acquire read to ensure we always see the current node
@@ -331,7 +331,8 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
     static class WaitPolicy {
         private int wait;
         private final WaitStrategy strategy;
-        private int waitCount;
+        private int successWaitCount;
+        private int failWaitCount;
 
 
         WaitPolicy(WaitStrategy strategy) {
@@ -341,37 +342,36 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
                 case SPIN -> MIN_SPIN;
             };
 
-            waitCount = 0;
+            successWaitCount = 0;
         }
 
-        static final int MIN_SPIN = 10;
-        static final int MAX_SPIN = 200;
+        static final int MIN_SPIN = 50;
+        static final int MAX_SPIN = 500;
 
-        static final int MIN_PARK = 100;
-        static final int MAX_PARK = 1000;
+        static final int MIN_PARK = 300;
+        static final int MAX_PARK = 3000;
 
-        static final int UPPER_LIMIT = 5;
-        static final int LOWER_LIMIT = -5;
+        static final int LIMIT = 5;
 
 
         void increaseWait() {
-            if (++waitCount > UPPER_LIMIT) {
+            if (++successWaitCount > LIMIT) {
                 wait = switch (strategy) {
                     case SPIN -> Math.min(wait * 2, MAX_SPIN);
-                    case PARK -> Math.min(wait + 100, MAX_PARK);
+                    case PARK -> Math.min(wait + 300, MAX_PARK);
                 };
 
-                waitCount = 0;
+                successWaitCount = 0;
             }
         }
 
         void decreaseWait() {
-            if (--waitCount < LOWER_LIMIT) {
+            if (++failWaitCount > LIMIT) {
                 wait = switch (strategy) {
                     case SPIN -> Math.max(wait / 2, MIN_SPIN);
-                    case PARK -> Math.max(wait - 100, MIN_PARK);
+                    case PARK -> Math.max(wait - 300, MIN_PARK);
                 };
-                waitCount = 0;
+                failWaitCount = 0;
             }
         }
 

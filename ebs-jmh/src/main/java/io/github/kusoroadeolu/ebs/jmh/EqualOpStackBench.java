@@ -43,7 +43,6 @@ EqualOpStackBench.eightThreads  thrpt   30  44.535 ± 2.372  ops/us
 EqualOpStackBench.fourThreads   thrpt   30  47.844 ± 2.001  ops/us
 EqualOpStackBench.twoThreads    thrpt   30  50.270 ± 1.824  ops/us
 *
-* //Elim array size = NPCU / 2
 Benchmark                                             Mode  Cnt           Score   Error   Units
 EqualOpStackBench.eightThreads                       thrpt   30          44.035 ± 2.125  ops/us
 EqualOpStackBench.eightThreads:failedCollisions      thrpt   30         190.000               #
@@ -64,8 +63,96 @@ EqualOpStackBench.twoThreads:stackSuccesses          thrpt   30  1488073239.000 
 EqualOpStackBench.twoThreads:successfulCollisions    thrpt   30             ≈ 0               #
 EqualOpStackBench.twoThreads:threadAbsence           thrpt   30        3462.000               #
 *
-* From the metrics, encountering similar operations is much more than thread absence in the elim array and us completing a successful elimination
-* I can redesign this for both pop and push to use separate elimination to ever prevent the issue of encountering similar operations in the elim array
+* Increased the max and min park time by 100%
+EqualOpStackBench.eightThreads                       thrpt   30          45.034 ± 1.854  ops/us
+EqualOpStackBench.eightThreads:failedCollisions      thrpt   30         447.000               #
+EqualOpStackBench.eightThreads:similarOps            thrpt   30      122003.000               #
+EqualOpStackBench.eightThreads:stackSuccesses        thrpt   30  1355863176.000               #
+EqualOpStackBench.eightThreads:successfulCollisions  thrpt   30      113106.000               #
+EqualOpStackBench.eightThreads:threadAbsence         thrpt   30       23372.000               #
+EqualOpStackBench.fourThreads                        thrpt   30          47.787 ± 1.758  ops/us
+EqualOpStackBench.fourThreads:failedCollisions       thrpt   30         254.000               #
+EqualOpStackBench.fourThreads:similarOps             thrpt   30       50819.000               #
+EqualOpStackBench.fourThreads:stackSuccesses         thrpt   30  1442509638.000               #
+EqualOpStackBench.fourThreads:successfulCollisions   thrpt   30       30872.000               #
+EqualOpStackBench.fourThreads:threadAbsence          thrpt   30        8998.000               #
+EqualOpStackBench.twoThreads                         thrpt   30          51.383 ± 1.237  ops/us
+EqualOpStackBench.twoThreads:failedCollisions        thrpt   30             ≈ 0               #
+EqualOpStackBench.twoThreads:similarOps              thrpt   30       17275.000               #
+EqualOpStackBench.twoThreads:stackSuccesses          thrpt   30  1575757217.000               #
+EqualOpStackBench.twoThreads:successfulCollisions    thrpt   30             ≈ 0               #
+EqualOpStackBench.twoThreads:threadAbsence           thrpt   30        2263.000               #
+*
+*
+* I decided to experiment a bit more to see what moved the needle to improve thrpt, i started by increasing the size of the collision array from NCPU / 2 to NCPU
+* Benchmark                                             Mode  Cnt           Score   Error   Units
+EqualOpStackBench.eightThreads                       thrpt   30          46.630 ± 2.550  ops/us
+EqualOpStackBench.eightThreads:failedCollisions      thrpt   30         508.000               #
+EqualOpStackBench.eightThreads:similarOps            thrpt   30      120401.000               #
+EqualOpStackBench.eightThreads:stackSuccesses        thrpt   30  1405007300.000               #
+EqualOpStackBench.eightThreads:successfulCollisions  thrpt   30      116044.000               #
+EqualOpStackBench.eightThreads:threadAbsence         thrpt   30       23953.000               #
+EqualOpStackBench.fourThreads                        thrpt   30          50.391 ± 1.629  ops/us
+EqualOpStackBench.fourThreads:failedCollisions       thrpt   30         266.000               #
+EqualOpStackBench.fourThreads:similarOps             thrpt   30       50728.000               #
+EqualOpStackBench.fourThreads:stackSuccesses         thrpt   30  1521352121.000               #
+EqualOpStackBench.fourThreads:successfulCollisions   thrpt   30       30002.000               #
+EqualOpStackBench.fourThreads:threadAbsence          thrpt   30        9013.000               #
+EqualOpStackBench.twoThreads                         thrpt   30          49.996 ± 0.987  ops/us
+EqualOpStackBench.twoThreads:failedCollisions        thrpt   30             ≈ 0               #
+EqualOpStackBench.twoThreads:similarOps              thrpt   30       17955.000               #
+EqualOpStackBench.twoThreads:stackSuccesses          thrpt   30  1530692684.000               #
+EqualOpStackBench.twoThreads:successfulCollisions    thrpt   30             ≈ 0               #
+EqualOpStackBench.twoThreads:threadAbsence           thrpt   30        1677.000               #
+*
+* I then decided to increase it again to NCPU * 2
+*
+Benchmark                                             Mode  Cnt           Score   Error   Units
+EqualOpStackBench.eightThreads                       thrpt   30          45.430 ± 1.964  ops/us
+EqualOpStackBench.eightThreads:failedCollisions      thrpt   30         427.000               #
+EqualOpStackBench.eightThreads:similarOps            thrpt   30      121705.000               #
+EqualOpStackBench.eightThreads:stackSuccesses        thrpt   30  1369780607.000               #
+EqualOpStackBench.eightThreads:successfulCollisions  thrpt   30      111074.000               #
+EqualOpStackBench.eightThreads:threadAbsence         thrpt   30       23075.000               #
+EqualOpStackBench.fourThreads                        thrpt   30          48.986 ± 1.521  ops/us
+EqualOpStackBench.fourThreads:failedCollisions       thrpt   30         226.000               #
+EqualOpStackBench.fourThreads:similarOps             thrpt   30       50867.000               #
+EqualOpStackBench.fourThreads:stackSuccesses         thrpt   30  1480418163.000               #
+EqualOpStackBench.fourThreads:successfulCollisions   thrpt   30       26952.000               #
+EqualOpStackBench.fourThreads:threadAbsence          thrpt   30        8930.000               #
+EqualOpStackBench.twoThreads                         thrpt   30          51.586 ± 1.473  ops/us
+EqualOpStackBench.twoThreads:failedCollisions        thrpt   30             ≈ 0               #
+EqualOpStackBench.twoThreads:similarOps              thrpt   30       17357.000               #
+EqualOpStackBench.twoThreads:stackSuccesses          thrpt   30  1571142825.000               #
+EqualOpStackBench.twoThreads:successfulCollisions    thrpt   30             ≈ 0               #
+EqualOpStackBench.twoThreads:threadAbsence           thrpt   30        2524.000               #
+*
+* From this we can see the size of the collision arr barely affects thrpt or collision count
+*
+*
+* I decided to increase the base and max wait time of threads when backing off to see if that moves the needle and oddly, it doesnt
+* Benchmark                                             Mode  Cnt           Score   Error   Units
+EqualOpStackBench.eightThreads                       thrpt   30          45.027 ± 2.506  ops/us
+EqualOpStackBench.eightThreads:failedCollisions      thrpt   30         386.000               #
+EqualOpStackBench.eightThreads:similarOps            thrpt   30      119519.000               #
+EqualOpStackBench.eightThreads:stackSuccesses        thrpt   30  1356773920.000               #
+EqualOpStackBench.eightThreads:successfulCollisions  thrpt   30      117918.000               #
+EqualOpStackBench.eightThreads:threadAbsence         thrpt   30       25178.000               #
+EqualOpStackBench.fourThreads                        thrpt   30          50.554 ± 2.889  ops/us
+EqualOpStackBench.fourThreads:failedCollisions       thrpt   30         368.000               #
+EqualOpStackBench.fourThreads:similarOps             thrpt   30       51152.000               #
+EqualOpStackBench.fourThreads:stackSuccesses         thrpt   30  1523962327.000               #
+EqualOpStackBench.fourThreads:successfulCollisions   thrpt   30       36136.000               #
+EqualOpStackBench.fourThreads:threadAbsence          thrpt   30        9242.000               #
+EqualOpStackBench.twoThreads                         thrpt   30          52.297 ± 1.496  ops/us
+EqualOpStackBench.twoThreads:failedCollisions        thrpt   30             ≈ 0               #
+EqualOpStackBench.twoThreads:similarOps              thrpt   30       16893.000               #
+EqualOpStackBench.twoThreads:stackSuccesses          thrpt   30  1598625411.000               #
+EqualOpStackBench.twoThreads:successfulCollisions    thrpt   30             ≈ 0               #
+EqualOpStackBench.twoThreads:threadAbsence           thrpt   30        2369.000               #
+*
+* I then decided to modify how wait times are modified by creating a separate counter
+* for successful and failed collisions when dealing with wait back off rather than using a shared counter
 * */
 public class EqualOpStackBench {
     private EliminationStack<Integer> stack;
