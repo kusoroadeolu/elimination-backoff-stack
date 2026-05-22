@@ -37,13 +37,31 @@ public class DECSStack<T> implements ConcurrentStack<T>{
         var s = stack;
         var p = policy.get();
         var idx = p.idx();
-        var wp = p.waitPolicy();
-        var rp = p.rangePolicy();
-
         ThreadNode<T> ourNode = new ThreadNode<>(idx, PUSH, t);
         if (s.push(ourNode)) return true;
+        elim(ourNode, s, p);
+        return true;
+
+    }
+
+    @Override
+    public T pop() {
+        var s = stack;
+        var p = policy.get();
+        var idx = p.idx();
+        ThreadNode<T> ourNode = new ThreadNode<>(idx, POP, null);
+        if (s.pop(ourNode)) return ourNode.node.value;
+        elim(ourNode, s, p);
+        return ourNode.node.value;
+    }
+
+    void elim(ThreadNode<T> ourNode, CentralStack<T> s, AdaptiveBackoffPolicy p) {
+        var idx = p.idx();
+        var wp = p.waitPolicy();
+        var rp = p.rangePolicy();
         var l = locations;
         var ca = collisionArray;
+        var op = ourNode.operation;
         ourNode.setLast(ourNode);
         l.setRelease(idx, ourNode); //Should make node and last write immediately visible
 
@@ -59,10 +77,10 @@ public class DECSStack<T> implements ConcurrentStack<T>{
                     //Try to make ourselves unavailable
                     if (l.compareAndSet(idx, ourNode, null)) {
                         //try to collide now
-                        if (activeCollide(ourNode, theirNode, l)) {
-                            break;
-                        } else { //Else retry stack
-                            if (s.multiPush(ourNode)) break;
+                        if (activeCollide(ourNode, theirNode, l)) break;
+                        else { //Else retry stack
+                            boolean succeed = op == PUSH ? s.multiPush(ourNode) : s.multiPop(ourNode);
+                            if (succeed) break;
                             rp.recordCollisionFailure(); //Failed to collide increase record range and decrease wait count
                             wp.decreaseWait();
                             l.setRelease(idx, ourNode);
@@ -90,19 +108,12 @@ public class DECSStack<T> implements ConcurrentStack<T>{
                 if (passiveCollide(ourNode, l)) break;
             }
 
-
-            if (s.multiPush(ourNode)) return true;
+            boolean succeed = op == PUSH ? s.multiPush(ourNode) : s.multiPop(ourNode);
+            if (succeed) return;
             l.setRelease(idx, ourNode); //Rewrite our info
         }
 
         wp.increaseWait();
-        return true;
-
-    }
-
-    @Override
-    public T pop() {
-        return null;
     }
 
     int locationToCollide(AtomicIntegerArray arr, int ourIdx, int pos) {
@@ -129,14 +140,14 @@ public class DECSStack<T> implements ConcurrentStack<T>{
         var n = ara.getAcquire(ours.idx());
         ara.setRelease(ours.idx(), null);
         var op = ours.operation;
-        var s = ours.loStatus();
+
 
         if (n.operation != op) {
-            if (op == POP) ours.node = n.node;
+            if (op == POP) ours.node = n.node; //Made visible by the cas to our idx
             return true;
         } else {
             while (true) {
-                s = ours.loStatus();
+                var s = ours.loStatus();
                 if (s == FINISHED) return true;
                 else if (s == RETRY) {
                     ours.soInit();
@@ -147,7 +158,7 @@ public class DECSStack<T> implements ConcurrentStack<T>{
     }
 
 
-    boolean multiEliminate(ThreadNode<T> ours, ThreadNode<T> theirs) {
+    void multiEliminate(ThreadNode<T> ours, ThreadNode<T> theirs) {
         var aCurr = ours;
         var pCurr = theirs;
         var op = aCurr.operation;
@@ -157,7 +168,7 @@ public class DECSStack<T> implements ConcurrentStack<T>{
             else pCurr.node = aCurr.node;
 
             aCurr.soFinished();
-            pCurr.soFinished();
+            pCurr.soFinished(); //Set release makes node instantly visible
 
             --aCurr.size; --pCurr.size;
             aCurr = aCurr.next;
@@ -168,13 +179,12 @@ public class DECSStack<T> implements ConcurrentStack<T>{
             aCurr.size = ours.size;
             aCurr.last = ours.last;
             aCurr.soRetry(); //Happens before on all previous next and size writes
-        } else {
+        } else if (pCurr != null) {
             pCurr.size = theirs.size;
             pCurr.last = theirs.last;
             pCurr.soRetry();
         }
 
-        return true;
     }
 
 
@@ -190,8 +200,7 @@ public class DECSStack<T> implements ConcurrentStack<T>{
     }
 
     public List<T> toList() {
-        var c = stack;
-        var h = c.loHead();
+        var h = stack.loHead();
         List<T> ls = new ArrayList<>();
         while (h != null){
             ls.add(h.value);
