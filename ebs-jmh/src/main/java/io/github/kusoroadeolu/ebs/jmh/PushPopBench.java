@@ -11,12 +11,7 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-@BenchmarkMode(Mode.Throughput)
-@OutputTimeUnit(TimeUnit.MICROSECONDS)
-@State(Scope.Benchmark)
-@Warmup(iterations = 10, time = 1)
-@Measurement(iterations = 10, time = 1)
-@Fork(3)
+
 /*
 * 50% pop and 50% search
 
@@ -167,9 +162,37 @@ PushPopBench.twoThreads      ELIM  thrpt   30  51.187 ± 3.394  ops/us
 PushPopBench.twoThreads      LOCK  thrpt   30  15.165 ± 0.802  ops/us
 PushPopBench.twoThreads      TREB  thrpt   30  11.897 ± 0.890  ops/us
 * */
+
+// DECS stack, worse thrpt than the elim stack but overall better than treiber and lock based
+
+/*
+* Benchmark                   Mode  Cnt   Score   Error   Units
+PushPopBench.eightThreads  thrpt   30  32.166 ± 1.891  ops/us
+PushPopBench.fourThreads   thrpt   30  31.783 ± 1.434  ops/us
+PushPopBench.twoThreads    thrpt   30  38.962 ± 0.883  ops/us
+* */
+
+/* Latency
+* Benchmark                  (type)  Mode  Cnt  Score   Error  Units
+PushPopBench.eightThreads    ELIM  avgt   30  0.183 ± 0.010  us/op
+PushPopBench.eightThreads    TREB  avgt   30  1.169 ± 0.047  us/op
+PushPopBench.eightThreads    DECS  avgt   30  0.236 ± 0.015  us/op
+PushPopBench.fourThreads     ELIM  avgt   30  0.088 ± 0.007  us/op
+PushPopBench.fourThreads     TREB  avgt   30  0.462 ± 0.011  us/op
+PushPopBench.fourThreads     DECS  avgt   30  0.108 ± 0.005  us/op
+PushPopBench.twoThreads      ELIM  avgt   30  0.041 ± 0.004  us/op
+PushPopBench.twoThreads      TREB  avgt   30  0.142 ± 0.006  us/op
+PushPopBench.twoThreads      DECS  avgt   30  0.054 ± 0.007  us/op
+* */
+@BenchmarkMode(Mode.AverageTime)
+@OutputTimeUnit(TimeUnit.MICROSECONDS)
+@State(Scope.Benchmark)
+@Warmup(iterations = 10, time = 1)
+@Measurement(iterations = 10, time = 1)
+@Fork(3)
 public class PushPopBench {
     private ConcurrentStack<Integer> stack;
-    @Param({"ELIM", "LOCK", "TREB"})
+    @Param({"ELIM", "TREB", "DECS"})
     private String type;
 
     @State(Scope.Thread)
@@ -186,10 +209,6 @@ public class PushPopBench {
     @TearDown(Level.Iteration)
     public void teardown() {
         while (stack.pop() != null);
-        if (type.equals("ELIM")) {
-            var s = (EliminationStack<Integer>) stack;
-            s.clearArrays();;
-        }
     }
 
 
@@ -197,11 +216,10 @@ public class PushPopBench {
     public void setup() {
         stack = switch (type) {
             case "ELIM" -> new EliminationStack<>(WaitStrategy.PARK);
-            case "LOCK" -> new LockedStack<>();
             case "TREB" -> new TreiberStack<>();
+            case "DECS" -> new DECSStack<>(WaitStrategy.PARK);
             default -> throw new RuntimeException();
         };
-
     }
 
     @Threads(2)

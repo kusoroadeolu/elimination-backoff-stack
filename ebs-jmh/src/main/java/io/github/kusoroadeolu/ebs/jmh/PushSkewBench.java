@@ -32,7 +32,7 @@ PushSkewBench.twoThreads      TREB  thrpt   45  13.276 ± 2.309  ops/us
 * */
 public class PushSkewBench {
     private ConcurrentStack<Integer> stack;
-    @Param({"ELIM", "LOCK", "TREB"})
+    @Param({"ELIM","DESC", "TREB"})
     private String type;
 
     @State(Scope.Thread)
@@ -48,10 +48,7 @@ public class PushSkewBench {
     @TearDown(Level.Iteration)
     public void teardown() {
         while (stack.pop() != null);
-        if (type.equals("ELIM")) {
-            var s = (EliminationStack<Integer>) stack;
-            s.clearArrays();;
-        }
+
     }
 
 
@@ -59,7 +56,7 @@ public class PushSkewBench {
     public void setup() {
         stack = switch (type) {
             case "ELIM" -> new EliminationStack<>(WaitStrategy.PARK);
-            case "LOCK" -> new LockedStack<>();
+            case "DESC" -> new DECSStack<>(WaitStrategy.PARK);
             case "TREB" -> new TreiberStack<>();
             default -> throw new RuntimeException();
         };

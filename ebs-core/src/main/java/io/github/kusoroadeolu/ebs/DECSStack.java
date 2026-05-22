@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.concurrent.atomic.AtomicReferenceArray;
+import java.util.concurrent.locks.LockSupport;
 
 import static io.github.kusoroadeolu.ebs.ConcurrentStack.Operation.POP;
 import static io.github.kusoroadeolu.ebs.ConcurrentStack.Operation.PUSH;
@@ -31,6 +32,11 @@ public class DECSStack<T> implements ConcurrentStack<T>{
         policy = ThreadLocal.withInitial(() -> new AdaptiveBackoffPolicy(strategy, counter.getAndIncrement(), collisionArraySize));
     }
 
+    public DECSStack(WaitStrategy strategy) {
+        var ncpu = Runtime.getRuntime().availableProcessors();
+        this(ncpu, ncpu, strategy);
+    }
+
 
     @Override
     public boolean push(T t) {
@@ -39,7 +45,7 @@ public class DECSStack<T> implements ConcurrentStack<T>{
         var idx = p.idx();
         ThreadNode<T> ourNode = new ThreadNode<>(idx, PUSH, t);
         if (s.push(ourNode)) return true;
-        elim(ourNode, s, p);
+        tryEliminate(ourNode, s, p);
         return true;
 
     }
@@ -51,13 +57,13 @@ public class DECSStack<T> implements ConcurrentStack<T>{
         var idx = p.idx();
         ThreadNode<T> ourNode = new ThreadNode<>(idx, POP, null);
         if (s.pop(ourNode)) return ourNode.node.value;
-        elim(ourNode, s, p);
+        tryEliminate(ourNode, s, p);
         return ourNode.node.value;
     }
 
-    void elim(ThreadNode<T> ourNode, CentralStack<T> s, AdaptiveBackoffPolicy p) {
+    void tryEliminate(ThreadNode<T> ourNode, CentralStack<T> s, AdaptiveBackoffPolicy p) {
         var idx = p.idx();
-        var wp = p.waitPolicy();
+       var wp = p.waitPolicy();
         var rp = p.rangePolicy();
         var l = locations;
         var ca = collisionArray;
@@ -82,7 +88,7 @@ public class DECSStack<T> implements ConcurrentStack<T>{
                             boolean succeed = op == PUSH ? s.multiPush(ourNode) : s.multiPop(ourNode);
                             if (succeed) break;
                             rp.recordCollisionFailure(); //Failed to collide increase record range and decrease wait count
-                            wp.decreaseWait();
+                             wp.decreaseWait();
                             l.setRelease(idx, ourNode);
                             continue; //Immediately try and collide again,
                         }
@@ -105,14 +111,13 @@ public class DECSStack<T> implements ConcurrentStack<T>{
             wp.idle();
 
             if (l.getAcquire(idx) == null || !l.compareAndSet(idx, ourNode, null)){
-                if (passiveCollide(ourNode, l)) break;
+                if (passiveCollide(ourNode, l)) return; //If we fail to passively collide, just try to access the stack again
             }
 
             boolean succeed = op == PUSH ? s.multiPush(ourNode) : s.multiPop(ourNode);
             if (succeed) return;
             l.setRelease(idx, ourNode); //Rewrite our info
         }
-
         wp.increaseWait();
     }
 
@@ -153,6 +158,8 @@ public class DECSStack<T> implements ConcurrentStack<T>{
                     ours.soInit();
                     return false;
                 }
+                LockSupport.parkNanos(1);
+
             }
         }
     }

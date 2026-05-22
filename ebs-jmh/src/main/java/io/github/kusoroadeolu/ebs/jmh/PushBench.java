@@ -6,7 +6,7 @@ import org.openjdk.jmh.infra.Blackhole;
 
 import java.util.concurrent.TimeUnit;
 
-@BenchmarkMode(Mode.Throughput)
+@BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 @State(Scope.Benchmark)
 @Warmup(iterations = 10, time = 1)
@@ -24,29 +24,50 @@ PushBench.twoThreads      LOCK  thrpt   30  8.838 ± 1.089  ops/us
 PushBench.twoThreads      TREB  thrpt   30  8.105 ± 1.033  ops/us
 */
 // Degrades gracefully, basically turns into a backoff treiber stack
+
+
+//DECS stack overall less thrpt that the elim stack but better than the treiber stack
+
+// Benchmark                Mode  Cnt  Score   Error   Units
+//PushBench.eightThreads  thrpt   30  8.004 ± 1.221  ops/us
+//PushBench.fourThreads   thrpt   30  8.573 ± 1.189  ops/us
+//PushBench.twoThreads    thrpt   30  8.041 ± 1.176  ops/us
+
+
+//Latency
+/*
+* Benchmark               (type)  Mode  Cnt  Score   Error  Units
+PushBench.eightThreads    ELIM  avgt   30  1.014 ± 0.117  us/op
+PushBench.eightThreads    TREB  avgt   30  1.172 ± 0.150  us/op
+PushBench.eightThreads    DECS  avgt   30  0.997 ± 0.119  us/op
+PushBench.fourThreads     ELIM  avgt   30  0.490 ± 0.062  us/op
+PushBench.fourThreads     TREB  avgt   30  0.507 ± 0.056  us/op
+PushBench.fourThreads     DECS  avgt   30  0.484 ± 0.052  us/op
+PushBench.twoThreads      ELIM  avgt   30  0.255 ± 0.025  us/op
+PushBench.twoThreads      TREB  avgt   30  0.258 ± 0.036  us/op
+PushBench.twoThreads      DECS  avgt   30  0.267 ± 0.028  us/op
+* */
 public class PushBench {
     private ConcurrentStack<Integer> stack;
-    @Param({"ELIM", "LOCK", "TREB"})
-    private String type;
+  @Param({"ELIM", "TREB", "DECS"})
+  private String type;
 
     @Setup
     public void setup() {
         stack = switch (type) {
+            case "ELIM" -> new EliminationStack<>(WaitStrategy.PARK);
             case "TREB" -> new TreiberStack<>();
-            case "ELIM" -> new EliminationStack<>(WaitStrategy.PARK); //To avoid long park time during elim failures
-            case "LOCK" -> new LockedStack<>();
+            case "DECS" -> new DECSStack<>(WaitStrategy.PARK);
             default -> throw new RuntimeException();
         };
+
+        stack = new DECSStack<>(WaitStrategy.SPIN);
 
     }
 
     @TearDown(Level.Iteration)
     public void teardown() {
         while (stack.pop() != null);
-        if (type.equals("ELIM")) {
-            var s = (EliminationStack<Integer>) stack;
-            s.clearArrays();
-        }
     }
 
     @Threads(2)
