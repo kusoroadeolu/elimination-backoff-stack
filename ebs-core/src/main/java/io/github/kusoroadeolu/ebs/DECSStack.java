@@ -34,8 +34,11 @@ import static io.github.kusoroadeolu.ebs.DECSStack.Status.*;
 * Easily said, its node should always be the head of the combining linked list
 *
 * Communication between threads when handling the combining logic is done between a status field. Mainly using the release and acquire memory modes
-* Invariant: A node marked as finished should always see the node swapped by the combining thread
+* The status enum has 3 main classes
+* INIT (default state), RETRY(you're now the combiner), FINISHED(your work has been done you can leave)
 *
+* Invariants: A node marked as finished should always see the node swapped by the combining thread
+* A node marked to retry, should always see all "next" writes and the latest "size" write by the old combining thread
 *
 * Operations on the stack are done in batches. Two main scenarios exist for batch push operations. We stick with the first option
 * 1. The combiner tries to batch append a list of combining nodes to the stack
