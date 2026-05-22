@@ -11,6 +11,7 @@
     <modules>
         <module>ebs-core</module>
         <module>ebs-jmh</module>
+        <module>ebs-stress</module>
     </modules>
 
     <properties>

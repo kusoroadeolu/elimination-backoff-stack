@@ -35,7 +35,7 @@ import static io.github.kusoroadeolu.ebs.ConcurrentStack.Operation.PUSH;
 *
 * If we're a pop operation, we try cas the push operation info object to null, if we fail, we return
 *
-* If we fail in either collision, that means we were delayed or too slow and another object has collided with that pop operation,
+* If we fail in either collision, that means we were delayed or too slow and another object has collided with that operation
 *
 * */
 
@@ -58,27 +58,31 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
     private final AtomicIntegerArray collisionArray;
     private final AtomicReferenceArray<ThreadInfo<T>> locations;
     private final ThreadLocal<AdaptiveBackoffPolicy> policy;
-    private static final int NCPU = Runtime.getRuntime().availableProcessors();
-    private static final int C_ARR_SIZE = NCPU;
+
     private static final int EMPTY = -1;
 
     public EliminationStack(WaitStrategy strategy) {
+        int ncpu =  Runtime.getRuntime().availableProcessors();
+        this(ncpu, ncpu, strategy);
+    }
+
+
+    public EliminationStack(int noThreads, int collisionArraySize, WaitStrategy strategy) {
         var counter = new AtomicInteger(0);
         stack = new SimpleStack<>(); //A simple treiber stack
-        collisionArray = new AtomicIntegerArray(C_ARR_SIZE); //Reduce by half to increase collision probability
-        locations = new AtomicReferenceArray<>(NCPU);
-
-        for (int i = 0; i < C_ARR_SIZE; ++i) {
+        collisionArray = new AtomicIntegerArray(collisionArraySize); //Reduce by half to increase collision probability
+        locations = new AtomicReferenceArray<>(noThreads);
+        for (int i = 0; i < collisionArraySize; ++i) {
             collisionArray.set(i, EMPTY);
         }
 
-        policy = ThreadLocal.withInitial(() -> new AdaptiveBackoffPolicy(strategy, counter.getAndIncrement()));
+        policy = ThreadLocal.withInitial(() -> new AdaptiveBackoffPolicy(strategy, counter.getAndIncrement(), collisionArraySize));
     }
 
     public boolean push(T val) {
         var s = stack;
         var p = policy.get();
-        var idx = p.idx;
+        var idx = p.idx();
         var wp = p.waitPolicy();
         var rp = p.rangePolicy();
 
@@ -141,7 +145,7 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
     public T pop() {
         var s = stack;
         var p = policy.get();
-        var idx = p.idx;
+        var idx = p.idx();
 
         ThreadInfo<T> ourInfo = new ThreadInfo<>(idx, null, POP);
         if (s.pop(ourInfo)) {
@@ -203,7 +207,7 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
     }
 
     public void clearArrays() {
-        for (int i = 0; i < NCPU; ++i) {
+        for (int i = 0; i < collisionArray.length(); ++i) {
             collisionArray.set(i, EMPTY);
             locations.set(i, null);
         }
@@ -212,11 +216,6 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
 
     int locationToCollide(AtomicIntegerArray arr, int ourIdx, int pos) {
         return arr.getAndSet(pos, ourIdx);
-    }
-
-    //Bounded to location NCPU / 2
-    int calculatePos() {
-        return Math.abs(ThreadLocalRandom.current().nextInt() % C_ARR_SIZE);
     }
 
     void popFinishCollide(ThreadInfo<T> ours, ThreadInfo<T> theirs, AtomicReferenceArray<ThreadInfo<T>> l) {
@@ -254,147 +253,8 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
 
 
 
-    // Adaptive backoff
-    /*
-     * Back-off in space, we start with a factor which subsets our range to half the array
-     * If we fail to collide with another thread `x` times.
-     * It means the range we're operating in is too wide,
-     * hence we decrease the factor to increase our chance of colliding with an operation
-
-     * If we encounter a thread `x` times, but fail to collide with it ( the most probable reason is another thread has collided with it)
-     * We multiply our factor by 2
-     *
-     * By failing to eliminate a thread, it means we failed to find a
-     *
-     *
-     * Backoff in time, we start at the min count
-     * If we fail to collide we increase a local count,
-     *  once we reach a threshold we decrease our wait time
-     *  basically it means if we're failing to collide we should retry more often to collide rather than spinning idly
-     *
-     * If we collide we increase a local count.
-     *  once we reach a threshold we increase our wait time
-     *  basically it means if we collide a lot we can wait longer as from our past record, we'll have been collided with
-     *
-     *
-     * We approach these constraints by providing range
-     *
-     * */
-    private static class AdaptiveBackoffPolicy {
-        private final int idx;
-        private final RangePolicy rangePolicy;
-        private final WaitPolicy waitPolicy;
 
 
-        AdaptiveBackoffPolicy(WaitStrategy strategy, int idx) {
-            this.idx = idx;
-            this.waitPolicy = new WaitPolicy(strategy);
-            this.rangePolicy = new RangePolicy();
-        }
-
-        public WaitPolicy waitPolicy() {
-            return waitPolicy;
-        }
-
-        public RangePolicy rangePolicy() {
-            return rangePolicy;
-        }
-    }
-
-    static class WaitPolicy {
-        private int wait;
-        private final WaitStrategy strategy;
-        private int successWaitCount;
-        private int failWaitCount;
-
-
-        WaitPolicy(WaitStrategy strategy) {
-            this.strategy = Objects.requireNonNull(strategy);
-            wait = switch (strategy) {
-                case PARK -> MIN_PARK;
-                case SPIN -> MIN_SPIN;
-            };
-
-            successWaitCount = 0;
-        }
-
-        static final int MIN_SPIN = 10;
-        static final int MAX_SPIN = 100;
-
-        static final int MIN_PARK = 100;
-        static final int MAX_PARK = 1000;
-
-        static final int LIMIT = 5;
-
-
-        void increaseWait() {
-            if (++successWaitCount > LIMIT) {
-                wait = switch (strategy) {
-                    case SPIN -> Math.min(wait * 2, MAX_SPIN);
-                    case PARK -> Math.min(wait + 300, MAX_PARK);
-                };
-
-                successWaitCount = 0;
-            }
-        }
-
-        void decreaseWait() {
-            if (++failWaitCount > LIMIT) {
-                wait = switch (strategy) {
-                    case SPIN -> Math.max(wait / 2, MIN_SPIN);
-                    case PARK -> Math.max(wait - 300, MIN_PARK);
-                };
-                failWaitCount = 0;
-            }
-        }
-
-        void idle() {
-            switch (strategy) {
-                case SPIN -> {
-                    int count = 0;
-                    while (++count < wait) Thread.onSpinWait();
-                }
-                case PARK -> LockSupport.parkNanos(wait);
-            }
-        }
-
-    }
-
-
-    static class RangePolicy {
-        private int collisionFailure;
-        private int threadAbsence;
-        private float rangeFactor = 0.5f;
-        static final int LIMIT = 5;
-        private int range = 1; // start narrow, expand on success
-
-        void recordThreadAbsence() {
-            if (++threadAbsence > LIMIT) {
-                rangeFactor = Math.max(0.1f, rangeFactor / 2);
-                range = Math.max(1, (int) (C_ARR_SIZE * rangeFactor));
-               threadAbsence = 0;
-            }
-        }
-
-        void recordCollisionFailure() {
-            if (++collisionFailure > LIMIT) {
-                rangeFactor = Math.min(1f, rangeFactor * 2);
-                range = Math.max(1, (int) (C_ARR_SIZE * rangeFactor));
-                collisionFailure = 0;
-
-            }
-        }
-
-        int calculatePos() {
-            //half = 1/2  =0; start = 1; end = (3 or 2.5) : 2
-            int mid = C_ARR_SIZE / 2;
-            int half = range / 2;
-            int start = Math.max(0, mid - half);
-            int end = Math.min(C_ARR_SIZE - 1, mid + half);
-            return start + Math.abs(ThreadLocalRandom.current().nextInt() % (end - start + 1));
-        }
-
-    }
 
 
 

@@ -25,7 +25,10 @@ PushSkewBench.twoThreads      ELIM  thrpt   45  15.924 ± 2.500  ops/us
 PushSkewBench.twoThreads      LOCK  thrpt   45  15.898 ± 0.264  ops/us
 PushSkewBench.twoThreads      TREB  thrpt   45  13.276 ± 2.309  ops/us
 * 75% push 25% pop
-* The elim stacks thrpt drops as operations asymmetric, so
+* The elim stacks thrpt drops as operation ratio becomes asymmetric,
+* unlike the 100% push bench, there are some consumers,
+* so the stack doesn't grow unbounded throughout
+* the iteration which means less pressure on the GC hence more thrpt
 * */
 public class PushSkewBench {
     private ConcurrentStack<Integer> stack;
@@ -35,7 +38,7 @@ public class PushSkewBench {
     @State(Scope.Thread)
     public static class ThreadState {
         boolean pop = true;
-        static final AtomicInteger threadCounter = new AtomicInteger();
+        static final AtomicInteger threadCounter = new AtomicInteger(1);
         @Setup
         public void setup() {
             pop = (threadCounter.getAndIncrement() % 4) == 0;

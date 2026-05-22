@@ -12,26 +12,6 @@ import static io.github.kusoroadeolu.ebs.ConcurrentStack.Node.EMPTY;
 public interface ConcurrentStack<T> {
     boolean push(T t);
     T pop();
-//    default Metrics getMetrics() {
-//        return new Metrics();
-//    }
-//
-//    class Metrics {
-//        public int successfulCollisions;
-//        public int failedCollisions;
-//        public int stackSuccesses;
-//        public int threadAbsence;
-//        public int similarOps;
-//
-//
-//        public void reset() {
-//            successfulCollisions = 0;
-//            failedCollisions = 0;
-//            stackSuccesses = 0;
-//            threadAbsence = 0;
-//            similarOps = 0;
-//        }
-//    }
 
     @SuppressWarnings("unchecked")
     class Node<T> {
@@ -50,6 +30,10 @@ public interface ConcurrentStack<T> {
 
         public Node<T> lpNext() {
             return (Node<T>) NEXT.get(this);
+        }
+
+        public Node<T> loNext() {
+            return (Node<T>) NEXT.getAcquire(this);
         }
 
         @Override
@@ -97,11 +81,6 @@ public interface ConcurrentStack<T> {
 
     enum Operation {
         POP, PUSH
-    }
-
-    static void main() {
-        var s = ClassLayout.parseInstance(ThreadInfo.class).toPrintable();
-        System.out.println(s);
     }
 
 }
