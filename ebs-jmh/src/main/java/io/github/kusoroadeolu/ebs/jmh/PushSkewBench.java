@@ -56,7 +56,7 @@ PushSkewBench.twoThreads      DESC  thrpt   30   8.662 ± 1.083  ops/us
 * */
 public class PushSkewBench {
     private ConcurrentStack<Integer> stack;
-    @Param({"ELIM","DESC"})
+    @Param({"ELIM", "TREB" ,"DESC"})
     private String type;
 
     @State(Scope.Thread)

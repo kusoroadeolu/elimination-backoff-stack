@@ -58,7 +58,7 @@ PushBench.twoThreads      DECS  avgt   30  0.245 ± 0.022  us/op
 * */
 public class PushBench {
     private ConcurrentStack<Integer> stack;
-  @Param({"ELIM", "DECS"})
+  @Param({"ELIM", "TREB" ,"DECS"})
   private String type;
 
     @Setup

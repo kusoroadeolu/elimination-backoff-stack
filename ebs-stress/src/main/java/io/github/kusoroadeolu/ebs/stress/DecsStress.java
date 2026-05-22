@@ -56,11 +56,11 @@ public class DecsStress {
     @Outcome(id = "1", expect = Expect.ACCEPTABLE, desc = "Invariant maintained")
     @Outcome(id = "0", expect = Expect.ACCEPTABLE_INTERESTING, desc = "Pop ran before push")
     @State
-    public static class PushPopCompleteness {
+    public static class PushPopCorrectness {
         public final DECSStack<Integer> stack;
         public final Set<Integer> set;
 
-        public PushPopCompleteness() {
+        public PushPopCorrectness() {
             stack = new DECSStack<>(4, 1, WaitStrategy.SPIN);
             set = ConcurrentHashMap.newKeySet(2);
         }
@@ -102,6 +102,7 @@ public class DecsStress {
     }
 
 
+    //Ensure 2 pops never pop the same value more than once
     @JCStressTest
     @Outcome(id = "1", expect = Expect.ACCEPTABLE, desc = "Each value popped at most once")
     @Outcome(id = "0", expect = Expect.FORBIDDEN, desc = "Duplicate pop detected!")

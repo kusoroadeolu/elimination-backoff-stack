@@ -65,7 +65,7 @@ PushPopBench.twoThreads      DECS  avgt   30  0.078 ± 0.003  us/op
 @Fork(3)
 public class PushPopBench {
     private ConcurrentStack<Integer> stack;
-    @Param({"ELIM", "DECS"})
+    @Param({"ELIM", "TREB" ,"DECS"})
     private String type;
 
     @State(Scope.Thread)

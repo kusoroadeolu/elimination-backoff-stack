@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class EliminationFcStackTest {
 //    @Test
 //    void testMultiPop() {
-//        var stack = new DECSStack.CentralStack<Integer>();
+//        var stack = new DECSStack.MultiStack<Integer>();
 //
 //        // Prefill stack with 5 nodes: 1 -> 2 -> 3 -> 4 -> 5
 //        for (int i = 5; i >= 1; i--) {
@@ -34,7 +34,7 @@ class EliminationFcStackTest {
 //        assertEquals(2, tn2.node.value);
 //        assertEquals(3, tn3.node.value);
 //
-//        // Stack head should now be at 4
+//        // MultiStack head should now be at 4
 //        assertEquals(4, stack.loHead().value);
 //
 //        // All statuses should be FINISHED
@@ -45,7 +45,7 @@ class EliminationFcStackTest {
 //
 //    @Test
 //    void testMultiPopEmptyStack() {
-//        var stack = new DECSStack.CentralStack<Integer>();
+//        var stack = new DECSStack.MultiStack<Integer>();
 //        var tn1 = new ThreadNode<Integer>(1);
 //        tn1.size = 2;
 //        var tn2 = new ThreadNode<Integer>(2);
@@ -62,7 +62,7 @@ class EliminationFcStackTest {
 //
 //    @Test
 //    void testMultiPopMoreThanStack() {
-//        var stack = new DECSStack.CentralStack<Integer>();
+//        var stack = new DECSStack.MultiStack<Integer>();
 //        stack.push(1); // only 1 node
 //
 //        var tn1 = new ThreadNode<Integer>(1);
