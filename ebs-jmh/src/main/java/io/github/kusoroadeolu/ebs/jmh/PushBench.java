@@ -6,7 +6,7 @@ import org.openjdk.jmh.infra.Blackhole;
 
 import java.util.concurrent.TimeUnit;
 
-@BenchmarkMode(Mode.AverageTime)
+@BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 @State(Scope.Benchmark)
 @Warmup(iterations = 10, time = 1)
@@ -34,34 +34,41 @@ PushBench.twoThreads      TREB  thrpt   30  8.105 ± 1.033  ops/us
 //PushBench.twoThreads    thrpt   30  8.041 ± 1.176  ops/us
 
 
-//Latency
-/*
+/* Latency (Park)
+Benchmark               (type)  Mode  Cnt   Score    Error  Units
+PushBench.eightThreads    ELIM  avgt   30   1.195 ±  0.450  us/op
+PushBench.eightThreads    TREB  avgt   30   1.892 ±  0.291  us/op
+PushBench.eightThreads    DECS  avgt   30   1.669 ±  0.756  us/op
+PushBench.fourThreads     ELIM  avgt   30   0.478 ±  0.028  us/op
+PushBench.fourThreads     TREB  avgt   30   0.695 ±  0.088  us/op
+PushBench.fourThreads     DECS  avgt   30  17.653 ± 60.427  us/op
+PushBench.twoThreads      ELIM  avgt   30   0.265 ±  0.039  us/op
+PushBench.twoThreads      TREB  avgt   30   0.272 ±  0.030  us/op
+PushBench.twoThreads      DECS  avgt   30   0.415 ±  0.383  us/ope
+* */
+
+/* Latency (Spin)
 * Benchmark               (type)  Mode  Cnt  Score   Error  Units
-PushBench.eightThreads    ELIM  avgt   30  1.014 ± 0.117  us/op
-PushBench.eightThreads    TREB  avgt   30  1.172 ± 0.150  us/op
-PushBench.eightThreads    DECS  avgt   30  0.997 ± 0.119  us/op
-PushBench.fourThreads     ELIM  avgt   30  0.490 ± 0.062  us/op
-PushBench.fourThreads     TREB  avgt   30  0.507 ± 0.056  us/op
-PushBench.fourThreads     DECS  avgt   30  0.484 ± 0.052  us/op
-PushBench.twoThreads      ELIM  avgt   30  0.255 ± 0.025  us/op
-PushBench.twoThreads      TREB  avgt   30  0.258 ± 0.036  us/op
-PushBench.twoThreads      DECS  avgt   30  0.267 ± 0.028  us/op
+PushBench.eightThreads    ELIM  avgt   30  1.313 ± 0.198  us/op
+PushBench.eightThreads    DECS  avgt   30  1.036 ± 0.109  us/op
+PushBench.fourThreads     ELIM  avgt   30  0.574 ± 0.056  us/op
+PushBench.fourThreads     DECS  avgt   30  0.500 ± 0.047  us/op
+PushBench.twoThreads      ELIM  avgt   30  0.354 ± 0.184  us/op
+PushBench.twoThreads      DECS  avgt   30  0.245 ± 0.022  us/op
 * */
 public class PushBench {
     private ConcurrentStack<Integer> stack;
-  @Param({"ELIM", "TREB", "DECS"})
+  @Param({"ELIM", "DECS"})
   private String type;
 
     @Setup
     public void setup() {
         stack = switch (type) {
-            case "ELIM" -> new EliminationStack<>(WaitStrategy.PARK);
-            case "TREB" -> new TreiberStack<>();
-            case "DECS" -> new DECSStack<>(WaitStrategy.PARK);
+           // case "ELIM" -> new EliminationStack<>(WaitStrategy.SPIN);
+          //  case "TREB" -> new TreiberStack<>();
+            case "DECS" -> new DECSStack<>(WaitStrategy.SPIN);
             default -> throw new RuntimeException();
         };
-
-        stack = new DECSStack<>(WaitStrategy.SPIN);
 
     }
 
