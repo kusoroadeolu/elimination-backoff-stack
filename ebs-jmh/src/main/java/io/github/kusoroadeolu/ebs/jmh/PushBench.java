@@ -6,7 +6,7 @@ import org.openjdk.jmh.infra.Blackhole;
 
 import java.util.concurrent.TimeUnit;
 
-@BenchmarkMode(Mode.Throughput)
+@BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 @State(Scope.Benchmark)
 @Warmup(iterations = 10, time = 1)
@@ -58,7 +58,7 @@ PushBench.twoThreads      DECS  avgt   30  0.245 ± 0.022  us/op
 * */
 public class PushBench {
     private ConcurrentStack<Integer> stack;
-  @Param({"ELIM", "TREB" ,"DECS"})
+  @Param({"ELIM", "TREB", "DECS"})
   private String type;
 
     @Setup

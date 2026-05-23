@@ -15,44 +15,44 @@ import static io.github.kusoroadeolu.ebs.DECSStack.Status.*;
 
 //Based on the paper https://arxiv.org/pdf/1106.6304
 /*
-* A variant of the EB stack.
-* This stack aims to fix the issue of the elimination backoff stack.
-* This stack combines the flat combing paradigm when similar operations collide.
-*
-* Unlike the EB stack, if similar ops collide.
-*
-* Each thread maintains a local thread node field which contains a next thread node ptr, a stack node ptr, a last node ptr and a size ptr
-* The thread which initiated the collision, swaps itself to the passive collider's location
-* and links the passive colliders thread node to its last node.
-*
-* The remainder of the core algorithm largely remains unchanged, however we do need to address the fact similar ops can collide.
-* So when we successfully collide with an inverse op.
-* We walk down from our node eliminating each op until we reach the tail of our node or the node we collided with
-* If we failed to fully eliminate all nodes from either ours or their node, we hand off the combining task to the first node we failed to eliminate
-*
-* The main invariant here is that a thread with the task of combining other threads operations, the reference node which it holds should always be its own.
-* Easily said, its node should always be the head of the combining linked list
-*
-* Communication between threads when handling the combining logic is done between a status field. Mainly using the release and acquire memory modes
-* The status enum has 3 main classes
-* INIT (default state), RETRY(you're now the combiner), FINISHED(your work has been done you can leave)
-*
-* Invariants: A node marked as finished should always see the node swapped by the combining thread
-* A node marked to retry, should always see all "next" writes and the latest "size" write by the old combining thread
-*
-* Operations on the stack are done in batches. Two main scenarios exist for batch push operations. We stick with the first option
-* 1. The combiner tries to batch append a list of combining nodes to the stack
-* 2. The combiner continuously walk down each node trying to cas them to the head of the list, we hand off to the thread whose node we fail at.
-*
-* For pop operations we walk down the stack up to the length of the combiner's linked list size. Stopping at the tail of the stack.
-* If we to detach those nodes up the head of the stack, but the detached stack is not as long as the combining list,
-* we hand off the combining task to the thread whose node we failed to apply a pop operation to
-*
-*
-* A potential improvement can be made here to alleviate gc pressure.
-* 1. We can use an array based approach to build the thread node list rather than holding a reference to a next and last ref.
-* This improves cache locality and eliminates pointer chasing
-* */
+ * A variant of the EB stack.
+ * This stack aims to fix the issue of the elimination backoff stack.
+ * This stack combines the flat combing paradigm when similar operations collide.
+ *
+ * Unlike the EB stack, if similar ops collide.
+ *
+ * Each thread maintains a local thread node field which contains a next thread node ptr, a stack node ptr, a last node ptr and a size ptr
+ * The thread which initiated the collision, swaps itself to the passive collider's location
+ * and links the passive colliders thread node to its last node.
+ *
+ * The remainder of the core algorithm largely remains unchanged, however we do need to address the fact similar ops can collide.
+ * So when we successfully collide with an inverse op.
+ * We walk down from our node eliminating each op until we reach the tail of our node or the node we collided with
+ * If we failed to fully eliminate all nodes from either ours or their node, we hand off the combining task to the first node we failed to eliminate
+ *
+ * The main invariant here is that a thread with the task of combining other threads operations, the reference node which it holds should always be its own.
+ * Easily said, its node should always be the head of the combining linked list
+ *
+ * Communication between threads when handling the combining logic is done between a status field. Mainly using the release and acquire memory modes
+ * The status enum has 3 main classes
+ * INIT (default state), RETRY(you're now the combiner), FINISHED(your work has been done you can leave)
+ *
+ * Invariants: A node marked as finished should always see the node swapped by the combining thread
+ * A node marked to retry, should always see all "next" writes and the latest "size" write by the old combining thread
+ *
+ * Operations on the stack are done in batches. Two main scenarios exist for batch push operations. We stick with the first option
+ * 1. The combiner tries to batch append a list of combining nodes to the stack
+ * 2. The combiner continuously walk down each node trying to cas them to the head of the list, we hand off to the thread whose node we fail at.
+ *
+ * For pop operations we walk down the stack up to the length of the combiner's linked list size. Stopping at the tail of the stack.
+ * If we to detach those nodes up the head of the stack, but the detached stack is not as long as the combining list,
+ * we hand off the combining task to the thread whose node we failed to apply a pop operation to
+ *
+ *
+ * A potential improvement can be made here to alleviate gc pressure.
+ * 1. We can use an array based approach to build the thread node list rather than holding a reference to a next and last ref.
+ * This improves cache locality and eliminates pointer chasing
+ * */
 public class DECSStack<T> implements ConcurrentStack<T>{
     private final AtomicIntegerArray collisionArray;
     private final AtomicReferenceArray<ThreadNode<T>> locations;
@@ -103,7 +103,7 @@ public class DECSStack<T> implements ConcurrentStack<T>{
 
     void doEliminate(ThreadNode<T> ourNode, MultiStack<T> s, AdaptiveBackoffPolicy p) {
         var idx = p.idx();
-       var wp = p.waitPolicy();
+        var wp = p.waitPolicy();
         var rp = p.rangePolicy();
         var l = locations;
         var ca = collisionArray;
@@ -128,7 +128,7 @@ public class DECSStack<T> implements ConcurrentStack<T>{
                             boolean succeed = op == PUSH ? s.multiPush(ourNode) : s.multiPop(ourNode);
                             if (succeed) break;
                             rp.recordCollisionFailure(); //Failed to collide increase record range and decrease wait count
-                             wp.decreaseWait();
+                            wp.decreaseWait();
                             l.setRelease(idx, ourNode);
                             continue; //Immediately try and collide again,
                         }
@@ -294,7 +294,7 @@ public class DECSStack<T> implements ConcurrentStack<T>{
 
 
         Status loStatus() {
-          return (Status) STATUS.getAcquire(this);
+            return (Status) STATUS.getAcquire(this);
         }
 
         void setLast(ThreadNode<T> last) {
@@ -361,42 +361,42 @@ public class DECSStack<T> implements ConcurrentStack<T>{
             ConcurrentStack.Node<T> h;
             var curr = tn;
 
-                while ((h = loHead()) == null && curr != null) {
-                    curr.soFinished();
-                    curr = curr.next;
-                    --len;
-                }
+            while ((h = loHead()) == null && curr != null) {
+                curr.soFinished();
+                curr = curr.next;
+                --len;
+            }
 
-                if (curr == null) return true;
-                //Otherwise we reiterate the list marking everyone as pushed
+            if (curr == null) return true;
+            //Otherwise we reiterate the list marking everyone as pushed
 
-                int i = 1;
-                var n = h.loNext();
-                for (;  i < len && n != null; ++i) {
-                    n = n.loNext();
-                }
+            int i = 1;
+            var n = h.loNext();
+            for (;  i < len && n != null; ++i) {
+                n = n.loNext();
+            }
 
-                if (HEAD.compareAndSet(this, h, n)) {
-                    //Apply from curr
-                    while (curr != null) {
-                        if (h != null) {
-                            curr.node = h;
-                            h = h.lpNext();
-                        }
-
-                        curr.soFinished();
-                        curr = curr.next;
+            if (HEAD.compareAndSet(this, h, n)) {
+                //Apply from curr
+                while (curr != null) {
+                    if (h != null) {
+                        curr.node = h;
+                        h = h.lpNext();
                     }
 
-                    return true;
-                } else {
-                    if (tn != curr) { //We've applied our node and possibly others, handoff to the next unapplied node
-                        curr.size = len;
-                        curr.last = tn.last;
-                        curr.soRetry();
-                        return true;
-                    } else return false; //We didn't clear any nodes at all
+                    curr.soFinished();
+                    curr = curr.next;
                 }
+
+                return true;
+            } else {
+                if (tn != curr) { //We've applied our node and possibly others, handoff to the next unapplied node
+                    curr.size = len;
+                    curr.last = tn.last;
+                    curr.soRetry();
+                    return true;
+                } else return false; //We didn't clear any nodes at all
+            }
 
         }
 
@@ -432,6 +432,5 @@ public class DECSStack<T> implements ConcurrentStack<T>{
         }
     }
 }
-
 
 
