@@ -36,9 +36,10 @@ public class AdaptiveBackoffPolicy {
         private final WaitPolicy waitPolicy;
 
 
-        AdaptiveBackoffPolicy(WaitStrategy strategy, int idx, int collisionArraySize) {
+
+        AdaptiveBackoffPolicy(WaitPolicy policy, int idx, int collisionArraySize) {
             this.idx = idx;
-            this.waitPolicy = new WaitPolicy(strategy);
+            this.waitPolicy = policy;
             this.rangePolicy = new RangePolicy(collisionArraySize);
         }
 
@@ -52,18 +53,18 @@ public class AdaptiveBackoffPolicy {
             return rangePolicy;
         }
 
-    public int idx() {
+    public int arrayIndex() {
         return idx;
     }
 
-    public static class WaitPolicy {
+    public static class DefaultWaitPolicy implements WaitPolicy{
         private int wait;
         private final WaitStrategy strategy;
         private int successWaitCount;
         private int failWaitCount;
 
 
-        WaitPolicy(WaitStrategy strategy) {
+        public DefaultWaitPolicy(WaitStrategy strategy) {
             this.strategy = Objects.requireNonNull(strategy);
             wait = switch (strategy) {
                 case PARK -> MIN_PARK;
@@ -73,36 +74,38 @@ public class AdaptiveBackoffPolicy {
             successWaitCount = 0;
         }
 
-        static final int MIN_SPIN = 10;
-        static final int MAX_SPIN = 100;
+        static final int MIN_SPIN = 100;
+        static final int MAX_SPIN = 1000;
 
-        static final int MIN_PARK = 100;
-        static final int MAX_PARK = 1000;
+        static final int MIN_PARK = 1;
+        static final int MAX_PARK = 10;
 
         static final int LIMIT = 5;
 
-
+        @Override
         public void increaseWait() {
             if (++successWaitCount > LIMIT) {
                 wait = switch (strategy) {
                     case SPIN -> Math.min(wait * 2, MAX_SPIN);
-                    case PARK -> Math.min(wait + 300, MAX_PARK);
+                    case PARK -> Math.min(wait + 2, MAX_PARK);
                 };
 
                 successWaitCount = 0;
             }
         }
 
+        @Override
         public void decreaseWait() {
             if (++failWaitCount > LIMIT) {
                 wait = switch (strategy) {
                     case SPIN -> Math.max(wait / 2, MIN_SPIN);
-                    case PARK -> Math.max(wait - 300, MIN_PARK);
+                    case PARK -> Math.max(wait - 1, MIN_PARK);
                 };
                 failWaitCount = 0;
             }
         }
 
+        @Override
         public void idle() {
             switch (strategy) {
                 case SPIN -> {
@@ -113,6 +116,64 @@ public class AdaptiveBackoffPolicy {
             }
         }
 
+    }
+
+    public static class AdaptiveWaitPolicy implements WaitPolicy{
+
+        private WaitStrategy mode;
+        private int spinCount;
+        private int parkNanos;
+        private int successCount;
+        private int failCount;
+
+        static final int MIN_SPIN = 100;
+        static final int MAX_SPIN = 1000;
+
+        static final int MIN_PARK = 1;
+        static final int MAX_PARK = 10;
+
+        static final int LIMIT = 5;
+
+        AdaptiveWaitPolicy() {
+            mode = WaitStrategy.SPIN;
+            spinCount = MIN_SPIN;
+            parkNanos = MIN_PARK;
+            successCount = 0;
+            failCount = 0;
+        }
+
+        public void increaseWait() {
+            if (++successCount > LIMIT) {
+                if (mode == WaitStrategy.SPIN) {
+                    spinCount = Math.min(spinCount * 2, MAX_SPIN);
+                    if (spinCount == MAX_SPIN) mode = WaitStrategy.PARK;
+                } else {
+                    parkNanos = Math.min(parkNanos + 2, MAX_PARK);
+                }
+                successCount = 0;
+            }
+        }
+
+        public void decreaseWait() {
+            if (++failCount > LIMIT) {
+                if (mode == WaitStrategy.PARK) {
+                    parkNanos = Math.max(parkNanos - 1, MIN_PARK);
+                    if (parkNanos == MIN_PARK) mode = WaitStrategy.SPIN;
+                } else {
+                    spinCount = Math.max(spinCount / 2, MIN_SPIN);
+                }
+                successCount = 0;
+            }
+        }
+
+        public void idle() {
+            if (mode == WaitStrategy.SPIN) {
+                int count = 0;
+                while (++count < spinCount) Thread.onSpinWait();
+            } else {
+                LockSupport.parkNanos(parkNanos);
+            }
+        }
     }
 
 
@@ -146,12 +207,14 @@ public class AdaptiveBackoffPolicy {
         }
 
         public int calculatePos() {
-            //half = 1/2  =0; start = 1; end = (3 or 2.5) : 2
             int mid = collisionArraySize / 2;
             int half = range / 2;
             int start = Math.max(0, mid - half);
             int end = Math.min(collisionArraySize - 1, mid + half);
-            return start + Math.abs(ThreadLocalRandom.current().nextInt() % (end - start + 1));
+            int bound = end - start + 1;
+            return bound > 1
+                    ? start + ThreadLocalRandom.current().nextInt(bound)
+                    : start;
         }
 
     }

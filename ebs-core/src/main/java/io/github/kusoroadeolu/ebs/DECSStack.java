@@ -7,17 +7,18 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.concurrent.atomic.AtomicReferenceArray;
+import java.util.concurrent.locks.LockSupport;
 
 import static io.github.kusoroadeolu.ebs.ConcurrentStack.Operation.POP;
 import static io.github.kusoroadeolu.ebs.ConcurrentStack.Operation.PUSH;
 import static io.github.kusoroadeolu.ebs.DECSStack.Status.*;
 
 
-//Based on the paper https://arxiv.org/pdf/1106.6304
+//Based on the paper https://arxiv.org/pdf/1106.6304 (Dynamic Elimination Combining Stack)
 /*
  * A variant of the EB stack.
  * This stack aims to fix the issue of the elimination backoff stack.
- * This stack combines the flat combing paradigm when similar operations collide.
+ * This stack combines the flat combing paradigm by allowing similar ops to batch together when they collide
  *
  * Unlike the EB stack, if similar ops collide.
  *
@@ -33,8 +34,10 @@ import static io.github.kusoroadeolu.ebs.DECSStack.Status.*;
  * The main invariant here is that a thread with the task of combining other threads operations, the reference node which it holds should always be its own.
  * Easily said, its node should always be the head of the combining linked list
  *
- * Communication between threads when handling the combining logic is done between a status field. Mainly using the release and acquire memory modes
+ * Communication between threads when handling the combining logic is done between a status field.
+ * Mainly using release and acquire memory modes
  * The status enum has 3 main classes
+ *
  * INIT (default state), RETRY(you're now the combiner), FINISHED(your work has been done you can leave)
  *
  * Invariants: A node marked as finished should always see the node swapped by the combining thread
@@ -51,7 +54,7 @@ import static io.github.kusoroadeolu.ebs.DECSStack.Status.*;
  *
  * A potential improvement can be made here to alleviate gc pressure.
  * 1. We can use an array based approach to build the thread node list rather than holding a reference to a next and last ref.
- * This improves cache locality and eliminates pointer chasing
+ * This conforms to the principle of spatial locality, doesn't mean better perf though
  * */
 public class DECSStack<T> implements ConcurrentStack<T>{
     private final AtomicIntegerArray collisionArray;
@@ -60,7 +63,12 @@ public class DECSStack<T> implements ConcurrentStack<T>{
     private static final int EMPTY = -1;
     private final MultiStack<T> stack;
 
-    public DECSStack(int noThreads, int collisionArraySize, WaitStrategy strategy) {
+    public DECSStack(WaitPolicy policy) {
+        var ncpu = Runtime.getRuntime().availableProcessors();
+        this(ncpu, ncpu, policy);
+    }
+
+    public DECSStack(int noThreads, int collisionArraySize, WaitPolicy p) {
         var counter = new AtomicInteger(0);
         stack = new MultiStack<>(); //A simple treiber stack
         collisionArray = new AtomicIntegerArray(collisionArraySize); //Reduce by half to increase collision probability
@@ -69,12 +77,12 @@ public class DECSStack<T> implements ConcurrentStack<T>{
             collisionArray.set(i, EMPTY);
         }
 
-        policy = ThreadLocal.withInitial(() -> new AdaptiveBackoffPolicy(strategy, counter.getAndIncrement(), collisionArraySize));
+        policy = ThreadLocal.withInitial(() -> new AdaptiveBackoffPolicy(p, counter.getAndIncrement(), collisionArraySize));
     }
 
     public DECSStack(WaitStrategy strategy) {
         var ncpu = Runtime.getRuntime().availableProcessors();
-        this(ncpu, ncpu, strategy);
+        this(ncpu, ncpu, new AdaptiveBackoffPolicy.DefaultWaitPolicy(strategy));
     }
 
 
@@ -82,7 +90,7 @@ public class DECSStack<T> implements ConcurrentStack<T>{
     public boolean push(T t) {
         var s = stack;
         var p = policy.get();
-        var idx = p.idx();
+        var idx = p.arrayIndex();
         ThreadNode<T> ourNode = new ThreadNode<>(idx, PUSH, t);
         if (s.push(ourNode)) return true;
         doEliminate(ourNode, s, p);
@@ -94,7 +102,7 @@ public class DECSStack<T> implements ConcurrentStack<T>{
     public T pop() {
         var s = stack;
         var p = policy.get();
-        var idx = p.idx();
+        var idx = p.arrayIndex();
         ThreadNode<T> ourNode = new ThreadNode<>(idx, POP, null);
         if (s.pop(ourNode)) return ourNode.node.value;
         doEliminate(ourNode, s, p);
@@ -102,12 +110,13 @@ public class DECSStack<T> implements ConcurrentStack<T>{
     }
 
     void doEliminate(ThreadNode<T> ourNode, MultiStack<T> s, AdaptiveBackoffPolicy p) {
-        var idx = p.idx();
+        var idx = p.arrayIndex();
         var wp = p.waitPolicy();
         var rp = p.rangePolicy();
         var l = locations;
         var ca = collisionArray;
         var op = ourNode.operation;
+
         ourNode.setLast(ourNode);
         l.setRelease(idx, ourNode); //Should make node and last write immediately visible
 
@@ -191,15 +200,27 @@ public class DECSStack<T> implements ConcurrentStack<T>{
             if (op == POP) ours.node = n.node; //Made visible by the cas to our idx
             return true;
         } else {
+            int spins = 0;
             while (true) {
                 var s = ours.loStatus();
                 if (s == FINISHED) return true;
                 else if (s == RETRY) {
-                    ours.spInit();
+                    ours.spInit(); //Plain write is alright since we're the only ones ever reading our own write
                     return false;
                 }
 
+                spins = backoffAfterXSpins(++spins);
             }
+        }
+    }
+
+    int backoffAfterXSpins(int spins) {
+        if (spins < 64) {
+            Thread.onSpinWait();
+            return ++spins;
+        } else {
+            LockSupport.parkNanos(1);
+            return 0;
         }
     }
 
@@ -356,6 +377,8 @@ public class DECSStack<T> implements ConcurrentStack<T>{
         }
 
 
+
+        //A multi pop operation doesn't need to appear as a single atomic instructionv
         public boolean multiPop(ThreadNode<T> tn) {
             int len = tn.size;
             ConcurrentStack.Node<T> h;
@@ -368,7 +391,6 @@ public class DECSStack<T> implements ConcurrentStack<T>{
             }
 
             if (curr == null) return true;
-            //Otherwise we reiterate the list marking everyone as pushed
 
             int i = 1;
             var n = h.loNext();

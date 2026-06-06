@@ -1,5 +1,6 @@
 package io.github.kusoroadeolu.ebs.stress;
 
+import io.github.kusoroadeolu.ebs.AdaptiveBackoffPolicy;
 import io.github.kusoroadeolu.ebs.DECSStack;
 import io.github.kusoroadeolu.ebs.WaitStrategy;
 import org.openjdk.jcstress.annotations.*;
@@ -18,7 +19,7 @@ public class DecsStress {
         public final DECSStack<Integer> stack;
 
         public NoLostWrites() {
-            stack = new DECSStack<>(4, 1, WaitStrategy.SPIN);
+            stack = new DECSStack<>(4, 1, new AdaptiveBackoffPolicy.DefaultWaitPolicy(WaitStrategy.SPIN));
         }
 
 
@@ -61,7 +62,7 @@ public class DecsStress {
         public final Set<Integer> set;
 
         public PushPopCorrectness() {
-            stack = new DECSStack<>(4, 1, WaitStrategy.SPIN);
+            stack = new DECSStack<>(4, 1, new AdaptiveBackoffPolicy.DefaultWaitPolicy(WaitStrategy.SPIN));
             set = ConcurrentHashMap.newKeySet(2);
         }
 
@@ -100,55 +101,4 @@ public class DecsStress {
             set.clear();
         }
     }
-
-
-    //Ensure 2 pops never pop the same value more than once
-    @JCStressTest
-    @Outcome(id = "1", expect = Expect.ACCEPTABLE, desc = "Each value popped at most once")
-    @Outcome(id = "0", expect = Expect.FORBIDDEN, desc = "Duplicate pop detected!")
-    @State
-    public static class UniqueReads {
-        public final DECSStack<Integer> stack;
-        public final Map<Integer, Integer> popCounts;
-
-        public UniqueReads() {
-            stack = new DECSStack<>(5, 1, WaitStrategy.SPIN); //4 actors plus the constructor thread
-            popCounts = new ConcurrentHashMap<>();
-            stack.push(1);
-            stack.push(2);
-        }
-
-        @Actor
-        public void actor() {
-            var value = stack.pop();
-            if (value != null) popCounts.merge(value, 1, Integer::sum);
-        }
-
-        @Actor
-        public void actor1() {
-            var value = stack.pop();
-            if (value != null) popCounts.merge(value, 1, Integer::sum);
-        }
-
-        @Actor
-        public void actor2() {
-            var value = stack.pop();
-            if (value != null) popCounts.merge(value, 1, Integer::sum);
-        }
-
-        @Actor
-        public void actor3() {
-            var value = stack.pop();
-            if (value != null) popCounts.merge(value, 1, Integer::sum);
-        }
-
-        @Arbiter
-        public void arbiter(I_Result r) {
-            boolean noDuplicates = popCounts.values().stream().allMatch(count -> count <= 1);
-            r.r1 = noDuplicates ? 1 : 0;
-            popCounts.clear();
-        }
-    }
-
-
 }

@@ -3,6 +3,10 @@ package io.github.kusoroadeolu.ebs.jmh;
 import io.github.kusoroadeolu.ebs.*;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
+import org.openjdk.jmh.profile.JavaFlightRecorderProfiler;
+import org.openjdk.jmh.runner.RunnerException;
+import org.openjdk.jmh.runner.options.Options;
+import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 import java.util.concurrent.TimeUnit;
 
@@ -58,15 +62,15 @@ PushBench.twoThreads      DECS  avgt   30  0.245 ± 0.022  us/op
 * */
 public class PushBench {
     private ConcurrentStack<Integer> stack;
-  @Param({"ELIM", "TREB", "DECS"})
+  @Param({"DECS"})
   private String type;
 
     @Setup
     public void setup() {
         stack = switch (type) {
-           // case "ELIM" -> new EliminationStack<>(WaitStrategy.SPIN);
-          //  case "TREB" -> new TreiberStack<>();
-            case "DECS" -> new DECSStack<>(WaitStrategy.SPIN);
+            case "ELIM" -> new EliminationStack<>(WaitStrategy.SPIN);
+            case "TREB" -> new TreiberStack<>();
+            case "DECS" -> new DECSStack<>(WaitStrategy.PARK);
             default -> throw new RuntimeException();
         };
 
@@ -97,5 +101,15 @@ public class PushBench {
 
     void push(Blackhole bh){
         bh.consume(stack.push(42));
+    }
+
+    static class Runner {
+        static void main() throws RunnerException {
+            Options options = new OptionsBuilder()
+                    .include(PushBench.class.getSimpleName())
+                    .addProfiler(JavaFlightRecorderProfiler.class, "dir=C:\\jfr-stk")
+                    .build();
+            new org.openjdk.jmh.runner.Runner(options).run();
+        }
     }
 }

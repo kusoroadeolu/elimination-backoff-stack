@@ -57,7 +57,7 @@ PushPopBench.fourThreads     DECS  avgt   30  0.126 ± 0.005  us/op
 PushPopBench.twoThreads      ELIM  avgt   30  0.103 ± 0.033  us/op
 PushPopBench.twoThreads      DECS  avgt   30  0.078 ± 0.003  us/op
 * */
-@BenchmarkMode(Mode.AverageTime)
+@BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 @State(Scope.Benchmark)
 @Warmup(iterations = 10, time = 1)
@@ -65,7 +65,7 @@ PushPopBench.twoThreads      DECS  avgt   30  0.078 ± 0.003  us/op
 @Fork(3)
 public class PushPopBench {
     private ConcurrentStack<Integer> stack;
-    @Param({"ELIM", "TREB", "DECS"})
+    @Param({ "ELIM"})
     private String type;
 
     @State(Scope.Thread)
@@ -89,6 +89,7 @@ public class PushPopBench {
     public void setup() {
         stack = switch (type) {
             case "ELIM" -> new EliminationStack<>(WaitStrategy.SPIN);
+            case "MANES_ELIM" -> new ManesEliminationStack<>();
             case "TREB" -> new TreiberStack<>();
             case "DECS" -> new DECSStack<>(WaitStrategy.SPIN);
             default -> throw new RuntimeException();

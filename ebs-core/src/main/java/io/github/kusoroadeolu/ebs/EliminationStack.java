@@ -1,12 +1,9 @@
 package io.github.kusoroadeolu.ebs;
 
 
-import java.util.Objects;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.concurrent.atomic.AtomicReferenceArray;
-import java.util.concurrent.locks.LockSupport;
 
 import static io.github.kusoroadeolu.ebs.ConcurrentStack.Operation.POP;
 import static io.github.kusoroadeolu.ebs.ConcurrentStack.Operation.PUSH;
@@ -63,11 +60,11 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
 
     public EliminationStack(WaitStrategy strategy) {
         int ncpu =  Runtime.getRuntime().availableProcessors();
-        this(ncpu, ncpu, strategy);
+        this(ncpu, ncpu, new AdaptiveBackoffPolicy.DefaultWaitPolicy(strategy));
     }
 
 
-    public EliminationStack(int noThreads, int collisionArraySize, WaitStrategy strategy) {
+    public EliminationStack(int noThreads, int collisionArraySize, WaitPolicy p) {
         var counter = new AtomicInteger(0);
         stack = new SimpleStack<>(); //A simple treiber stack
         collisionArray = new AtomicIntegerArray(collisionArraySize); //Reduce by half to increase collision probability
@@ -76,13 +73,18 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
             collisionArray.set(i, EMPTY);
         }
 
-        policy = ThreadLocal.withInitial(() -> new AdaptiveBackoffPolicy(strategy, counter.getAndIncrement(), collisionArraySize));
+        policy = ThreadLocal.withInitial(() -> new AdaptiveBackoffPolicy(p, counter.getAndIncrement(), collisionArraySize));
+    }
+
+    public EliminationStack( WaitPolicy p) {
+        int ncpu =  Runtime.getRuntime().availableProcessors();
+        this(ncpu, ncpu, p);
     }
 
     public boolean push(T val) {
         var s = stack;
         var p = policy.get();
-        var idx = p.idx();
+        var idx = p.arrayIndex();
         var wp = p.waitPolicy();
         var rp = p.rangePolicy();
 
@@ -145,7 +147,7 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
     public T pop() {
         var s = stack;
         var p = policy.get();
-        var idx = p.idx();
+        var idx = p.arrayIndex();
 
         ThreadInfo<T> ourInfo = new ThreadInfo<>(idx, null, POP);
         if (s.pop(ourInfo)) {
@@ -249,13 +251,5 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
     static <T>void soLocation(int idx, AtomicReferenceArray<ThreadInfo<T>> array) {
         array.setRelease(idx, null);
     }
-
-
-
-
-
-
-
-
 
 }
