@@ -55,6 +55,14 @@ PushSkewBench.twoThreads      ELIM  thrpt   30   9.375 ± 1.284  ops/us
 PushSkewBench.twoThreads      DESC  thrpt   30   8.662 ± 1.083  ops/us
 * */
 
+
+/*
+* Benchmark                       (type)   Mode  Cnt   Score   Error   Units
+PushSkewBench.eightThreads  MANES_ELIM  thrpt   30   9.326 ± 2.364  ops/us
+PushSkewBench.fourThreads   MANES_ELIM  thrpt   30  55.255 ± 6.710  ops/us
+PushSkewBench.twoThreads    MANES_ELIM  thrpt   30   5.659 ± 0.803  ops/us
+* */
+
 public class PushSkewBench {
     private ConcurrentStack<Integer> stack;
     @Param({"ELIM", "DESC","MANES_ELIM"})

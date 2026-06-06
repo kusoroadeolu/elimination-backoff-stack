@@ -25,6 +25,14 @@ PushPopBench.twoThreads      LOCK  thrpt   30  15.165 ± 0.802  ops/us
 PushPopBench.twoThreads      TREB  thrpt   30  11.897 ± 0.890  ops/us
 * */
 
+
+/*
+* Benchmark                      (type)   Mode  Cnt   Score   Error   Units
+PushPopBench.eightThreads  MANES_ELIM  thrpt   30  11.312 ± 0.230  ops/us
+PushPopBench.fourThreads   MANES_ELIM  thrpt   30  21.983 ± 1.089  ops/us
+PushPopBench.twoThreads    MANES_ELIM  thrpt   30  42.943 ± 1.469  ops/us
+* */
+
 // DECS stack, worse thrpt than the elim stack but overall better than treiber and lock based
 
 /*
@@ -57,6 +65,14 @@ PushPopBench.fourThreads     DECS  avgt   30  0.126 ± 0.005  us/op
 PushPopBench.twoThreads      ELIM  avgt   30  0.103 ± 0.033  us/op
 PushPopBench.twoThreads      DECS  avgt   30  0.078 ± 0.003  us/op
 * */
+
+//No wait policy just a 2000 plain int spin
+/*
+*  Benchmark                  (type)   Mode  Cnt   Score   Error   Units
+PushPopBench.eightThreads    ELIM  thrpt   30  32.265 ± 0.978  ops/us
+PushPopBench.fourThreads     ELIM  thrpt   30  36.522 ± 0.308  ops/us
+PushPopBench.twoThreads      ELIM  thrpt   30  40.352 ± 2.420  ops/us
+* */
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 @State(Scope.Benchmark)
@@ -65,7 +81,7 @@ PushPopBench.twoThreads      DECS  avgt   30  0.078 ± 0.003  us/op
 @Fork(3)
 public class PushPopBench {
     private ConcurrentStack<Integer> stack;
-    @Param({"ELIM", "DESC","MANES_ELIM", "TREB"})
+    @Param({"ELIM", "DESC", "TREB", "MANES_ELIM"})
     private String type;
 
     @State(Scope.Thread)

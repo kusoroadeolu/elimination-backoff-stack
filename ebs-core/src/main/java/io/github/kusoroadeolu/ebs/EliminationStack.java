@@ -140,7 +140,7 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
             l.setRelease(idx, ourInfo); //Rewrite our info
         }
 
-        wp.increaseWait();
+      //  wp.increaseWait();
         return true;
     }
 
