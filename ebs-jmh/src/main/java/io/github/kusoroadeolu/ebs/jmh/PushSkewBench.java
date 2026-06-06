@@ -7,10 +7,10 @@ import org.openjdk.jmh.infra.Blackhole;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-@BenchmarkMode(Mode.AverageTime)
+@BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 @State(Scope.Benchmark)
-@Warmup(iterations = 15, time = 1)
+@Warmup(iterations = 10, time = 1)
 @Measurement(iterations = 10, time = 1)
 @Fork(3)
 /*
@@ -57,7 +57,7 @@ PushSkewBench.twoThreads      DESC  thrpt   30   8.662 ± 1.083  ops/us
 
 public class PushSkewBench {
     private ConcurrentStack<Integer> stack;
-    @Param({"ELIM", "TREB", "DECS"})
+    @Param({"ELIM", "DESC","MANES_ELIM"})
     private String type;
 
     @State(Scope.Thread)
@@ -80,7 +80,7 @@ public class PushSkewBench {
     @Setup
     public void setup() {
         stack = switch (type) {
-            case "ELIM" -> new EliminationStack<>(WaitStrategy.SPIN);
+            case "MANES_ELIM" -> new ManesEliminationStack<>();
             case "DESC" -> new DECSStack<>(WaitStrategy.SPIN);
             case "TREB" -> new TreiberStack<>();
             default -> throw new RuntimeException();

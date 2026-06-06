@@ -452,8 +452,8 @@ public final class ManesEliminationStack<E> extends AbstractCollection<E> implem
    * borrowed from {@link java.util.concurrent.Exchanger}'s hashIndex function.
    */
   static int startIndex() {
-    long id = Thread.currentThread().getId();
-    return (((int) (id ^ (id >>> 32))) ^ 0x811c9dc5) * 0x01000193;
+    long id = Thread.currentThread().threadId();
+    return ((Long.hashCode(id)) ^ 0x811c9dc5) * 0x01000193;
   }
 
   /* ---------------- Serialization Support -------------- */
