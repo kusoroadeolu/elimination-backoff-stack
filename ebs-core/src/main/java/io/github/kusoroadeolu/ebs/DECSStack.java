@@ -42,6 +42,8 @@ import static io.github.kusoroadeolu.ebs.DECSStack.Status.*;
  *
  * Invariants: A node marked as finished should always see the node swapped by the combining thread
  * A node marked to retry, should always see all "next" writes and the latest "size" write by the old combining thread
+ * A combining node, should always see all "next" writes and the latest "size" write by the thread it clashed with (this is done using size)
+
  *
  * Operations on the stack are done in batches. Two main scenarios exist for batch push operations. We stick with the first option
  * 1. The combiner tries to batch append a list of combining nodes to the stack
@@ -116,9 +118,8 @@ public class DECSStack<T> implements ConcurrentStack<T>{
         var l = locations;
         var ca = collisionArray;
         var op = ourNode.operation;
-
-        ourNode.setLast(ourNode);
-        l.setRelease(idx, ourNode); //Should make node and last write immediately visible
+        
+        l.setRelease(idx, ourNode); //Should  last write immediately visible
 
 
         while (true) {
@@ -237,7 +238,7 @@ public class DECSStack<T> implements ConcurrentStack<T>{
             ourCurr.soFinished();
             theirCurr.soFinished(); //Set release makes node instantly visible
 
-            --ourCurr.size; --theirCurr.size;
+            ourCurr.decrementSize(); theirCurr.decrementSize();
             ourCurr = ourCurr.next;
             theirCurr = theirCurr.next;
         }
@@ -247,11 +248,11 @@ public class DECSStack<T> implements ConcurrentStack<T>{
 
         //Handoff
         if (ourCurr != null) {
-            ourCurr.size = ours.size;
+            ourCurr.spSize(ours.lpSize());
             ourCurr.last = ours.last;
             ourCurr.soRetry(); //Happens before on all next and size writes. Basically the node we handed off to will always see all descendant nodes
         } else if (theirCurr != null) {
-            theirCurr.size = theirs.size;
+            theirCurr.spSize(theirs.lpSize());
             theirCurr.last = theirs.last;
             theirCurr.soRetry();
         }
@@ -263,13 +264,14 @@ public class DECSStack<T> implements ConcurrentStack<T>{
 
     void combine(ThreadNode<T> ours, ThreadNode<T> theirs) {
         var l = ours.last;
+        int theirSize = theirs.loSize();
         if (ours.operation == PUSH) {
             l.node.spNext(theirs.node);
         }
-
+        
         l.next = theirs;
         ours.last = theirs.last;
-        ours.size += theirs.size;
+        ours.soSize(ours.lpSize() + theirSize); //Happens before visibility for last and next when colliding
     }
 
     public List<T> toList() {
@@ -288,16 +290,20 @@ public class DECSStack<T> implements ConcurrentStack<T>{
         final int idx;
         ConcurrentStack.Node<T> node;
         final Operation operation;
-        volatile Status status = INIT;
+        volatile Status status;
         ThreadNode<T> next; //During handoff, all next writes will be made visible by a release status
         ThreadNode<T> last;
-        int size = 1;
+        volatile int size;
 
         public ThreadNode(int threadId, Operation operation, T t) {
             idx = threadId;
             this.operation = operation;
             if (operation == POP) this.node = (Node<T>) Node.EMPTY;
             else this.node = new Node<>(t);
+            
+            last = this;
+            size = 1;
+            status = INIT;
         }
 
 
@@ -312,14 +318,30 @@ public class DECSStack<T> implements ConcurrentStack<T>{
         void spInit() {
             STATUS.set(this, INIT);
         }
+        
+        int loSize() {
+           return (int) SIZE.getAcquire(this);
+        }
+
+        void soSize(int i) {
+            SIZE.setRelease(this, i);
+        }
+        
+        void decrementSize() {
+            SIZE.set(this, lpSize() - 1);
+        }
+
+        void spSize(int i) {
+            SIZE.set(this, i);
+        }
+        
+        int lpSize() {
+            return (int) SIZE.get(this);
+        }
 
 
         Status loStatus() {
             return (Status) STATUS.getAcquire(this);
-        }
-
-        void setLast(ThreadNode<T> last) {
-            this.last = last;
         }
 
         void soRetry() {
@@ -380,7 +402,7 @@ public class DECSStack<T> implements ConcurrentStack<T>{
 
         //A multi pop operation doesn't need to appear as a single atomic instructionv
         public boolean multiPop(ThreadNode<T> tn) {
-            int len = tn.size;
+            int len = tn.lpSize();
             ConcurrentStack.Node<T> h;
             var curr = tn;
 
@@ -413,9 +435,9 @@ public class DECSStack<T> implements ConcurrentStack<T>{
                 return true;
             } else {
                 if (tn != curr) { //We've applied our node and possibly others, handoff to the next unapplied node
-                    curr.size = len;
+                    curr.spSize(len);
                     curr.last = tn.last;
-                    curr.soRetry();
+                    curr.soRetry(); //Happens before for all next and last and size writes
                     return true;
                 } else return false; //We didn't clear any nodes at all
             }
@@ -444,10 +466,12 @@ public class DECSStack<T> implements ConcurrentStack<T>{
 
 
     private static final VarHandle STATUS;
+    private static final VarHandle SIZE;
 
     static {
         try {
             var l = MethodHandles.lookup();
+            SIZE = l.findVarHandle(ThreadNode.class, "size", int.class);
             STATUS = l.findVarHandle(ThreadNode.class, "status", Status.class);
         }catch (Exception e) {
             throw new RuntimeException(e);
