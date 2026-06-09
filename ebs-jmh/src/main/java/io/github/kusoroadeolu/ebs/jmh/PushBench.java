@@ -70,7 +70,7 @@ public class PushBench {
         stack = switch (type) {
             case "ELIM" -> new EliminationStack<>(WaitStrategy.SPIN);
             case "TREB" -> new TreiberStack<>();
-            case "DECS" -> new DECSStack<>(WaitStrategy.PARK);
+            case "DECS" -> new DECStack<>(WaitStrategy.PARK);
             default -> throw new RuntimeException();
         };
 

@@ -29,12 +29,20 @@ WaitStrategyBench.twoThreads      PARK  thrpt   30  29.585 ± 1.006  ops/us
 * Idle parks perform better across the board
 * My hypothesis
 * 1. 10 spins as a starting idling point is basically nothing, modern cpus blaze through it in pico seconds, so we're probably not even idling compared to a 100ns park
-* 2. To actually reach our max idle spin count of 200 (which is honestly still basically nothing compared to a 1000ns park), at best, we need to successfully get collided with (without failing any collisions we started) around 10 times
+* 2. To actually reach our max idle spin count of 200 (which is honestly still basically nothing compared to a 1000ns park), at best,
+we need to successfully get collided with (without failing any collisions we started) around 10 times
 * which is honestly basically  a long shot since threads are not deterministic
 
+/*
+Benchmark                       (type)   Mode  Cnt   Score   Error   Units
+WaitStrategyBench.eightThreads    SPIN  thrpt   30  34.527 ± 0.494  ops/us
+WaitStrategyBench.eightThreads    PARK  thrpt   30  45.405 ± 3.593  ops/us
+WaitStrategyBench.fourThreads     SPIN  thrpt   30  34.418 ± 0.713  ops/us
+WaitStrategyBench.fourThreads     PARK  thrpt   30  47.508 ± 0.644  ops/us
+WaitStrategyBench.twoThreads      SPIN  thrpt   30  44.863 ± 1.448  ops/us
+WaitStrategyBench.twoThreads      PARK  thrpt   30  52.194 ± 1.235  ops/us
+*/
 
-However spinning for a large x times could lead to us burning CPU, so increasing the spin count
-* */
 public class WaitStrategyBench {
     private ConcurrentStack<Integer> stack;
     @Param({"SPIN", "PARK"})

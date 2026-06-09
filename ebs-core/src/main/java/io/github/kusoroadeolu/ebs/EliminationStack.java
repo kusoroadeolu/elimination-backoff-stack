@@ -44,6 +44,7 @@ The collision array alone, in a sense helps and doesn't help, though context mat
 * a lot, meaning threads overlap a lot so only few threads make progress while others wait idly, so other indexes are just left empty)
 * or the workload is asymmetric (higher push/pop operations than its counterpart)
 * and little on the stack, we're basically reinventing the same problem just more complex.
+*
 * The collision array helps in the sense when there's contention on the head of the stack and rather than just backing off and doing nothing useful,
 * we shift that contention to a different structure where threads can possibly make progress rather than waiting idly
 * */
@@ -85,62 +86,9 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
         var s = stack;
         var p = policy.get();
         var idx = p.arrayIndex();
-        var wp = p.waitPolicy();
-        var rp = p.rangePolicy();
-
         ThreadInfo<T> ourInfo = new ThreadInfo<>(idx, val, PUSH);
         if (s.push(ourInfo)) return true;
-        var l = locations;
-        var ca = collisionArray;
-        l.setRelease(idx, ourInfo); //Should make node immediately visible
-
-
-        while (true) {
-            int pos = rp.calculatePos(); //random array collision position
-            int theirIdx = locationToCollide(ca, idx, pos);  //Location we're colliding with
-            if (theirIdx != EMPTY) {
-                var theirInfo = l.getAcquire(theirIdx); //Use an acquire read to ensure we always see the current node
-
-                //The id check here is to ensure that another thread has not already swapped their thread info with this thread
-                if (theirInfo != null && theirIdx == theirInfo.idx() && theirInfo.op == POP) {
-                    //Try to make ourselves unavailable
-                    if (l.compareAndSet(idx, ourInfo, null)) {
-                        //try to collide now
-                        if (tryCollide(ourInfo, theirInfo, l)) {
-                            break;
-                        }
-                        else { //Else retry stack
-                            if (s.push(ourInfo)) break;
-                            rp.recordCollisionFailure(); //Failed to collide increase record range and decrease wait count
-                            wp.decreaseWait();
-                            l.setRelease(idx, ourInfo);
-                            continue; //Immediately try and collide again,
-                        }
-
-                    } else break; //If we can't make ourselves unavailable, another thread has collided with us, so we return
-
-                } else {
-                    if (theirInfo == null) {
-                        rp.recordThreadAbsence(); //On thread absence
-                    }
-
-                }
-            }
-
-            wp.idle();
-
-            if (l.getAcquire(idx) == null || !l.compareAndSet(idx, ourInfo, null)){
-                break; //We've been collided with
-            }
-
-
-            if (s.push(ourInfo)) {
-                return true;
-            }
-            l.setRelease(idx, ourInfo); //Rewrite our info
-        }
-
-      //  wp.increaseWait();
+        doEliminate(s, ourInfo, p);
         return true;
     }
 
@@ -153,38 +101,46 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
         if (s.pop(ourInfo)) {
             return ourInfo.node().value;
         }
+        doEliminate(s, ourInfo, p);
+        return ourInfo.node().value;
+    }
 
-        var wp = p.waitPolicy();
-        var rp = p.rangePolicy();
+    void doEliminate(SimpleStack<T> s, ThreadInfo<T> ourInfo, AdaptiveBackoffPolicy p){
+        var idx = ourInfo.idx();
         var l = locations;
         var ca = collisionArray;
+        var wp = p.waitPolicy();
+        var rp = p.rangePolicy();
         l.setRelease(idx, ourInfo); //Should make node immediately visible
+        ThreadInfo<T> exchanged;
+
+
         while (true) {
-            int pos = rp.calculatePos(); //random collision position
-            int theirIdx = locationToCollide(ca, idx, pos);  //Location idx we're colliding with
+            int arenaPosition = rp.calculatePos(); //random array collision position
+            int theirIdx = locationToCollide(ca, idx, arenaPosition);  //Location we're colliding with
             if (theirIdx != EMPTY) {
-                var theirInfo = l.getAcquire(theirIdx); //Use a get acquire read to ensure we always see the current node
+                var theirInfo = l.getAcquire(theirIdx); //Use an acquire read to ensure we always see the current node
 
                 //The id check here is to ensure that another thread has not already swapped their thread info with this thread
-                if (theirInfo != null && theirIdx == theirInfo.idx() && theirInfo.op() == PUSH) {
+                if (theirInfo != null && theirIdx == theirInfo.idx() && theirInfo.op != ourInfo.op) {
                     //Try to make ourselves unavailable
                     if (l.compareAndSet(idx, ourInfo, null)) {
                         //try to collide now
-                        if (tryCollide(ourInfo, theirInfo, l)) {
-                            break;
-                        }
+                        if (tryCollide(ourInfo, theirInfo, l)) break;
                         else { //Else retry stack
-                            if (s.pop(ourInfo)) break;
+                            boolean succeed = ourInfo.op == PUSH ? s.push(ourInfo) : s.pop(ourInfo);
+                            if (succeed) break;
+
                             rp.recordCollisionFailure(); //Failed to collide increase record range and decrease wait count
                             wp.decreaseWait();
                             l.setRelease(idx, ourInfo);
                             continue; //Immediately try and collide again,
                         }
 
-                    }else {
-                        popFinishCollide(ourInfo, l.getAcquire(idx), l);
+                    } else {
+                        if (ourInfo.op == POP) popFinishCollide(ourInfo, l.getAcquire(idx), locations);
                         break;
-                    } //If we can't make ourselves unavailable, another thread has collided with us, so we finish colliding
+                    } //If we can't make ourselves unavailable, another thread has collided with us, so we return
 
                 } else {
                     if (theirInfo == null) {
@@ -194,26 +150,22 @@ public class EliminationStack<T> implements ConcurrentStack<T>{
             }
 
             wp.idle();
-            if (!l.compareAndSet(idx, ourInfo, null)) {
-                var i = l.getAcquire(idx);
-                popFinishCollide(ourInfo,i , l);
-                break;
-            } //We've been collided with
 
-            if (s.pop(ourInfo)) return ourInfo.node().value;
-            l.setRelease(idx, ourInfo);
+            if ((exchanged = l.getAcquire(idx)) != ourInfo || (exchanged = l.compareAndExchange(idx, ourInfo, null)) != ourInfo) {
+                if (ourInfo.op == POP) popFinishCollide(ourInfo, exchanged, locations); //If we're a pop op, this should never be null
+                break; //We've been collided with
+            }
+
+
+            boolean succeed = ourInfo.op == PUSH ? s.push(ourInfo) : s.pop(ourInfo);
+            if (succeed) return;
+            l.setRelease(idx, ourInfo); //Rewrite our info
         }
 
         wp.increaseWait();
-        return ourInfo.node().value;
     }
 
-    public void clearArrays() {
-        for (int i = 0; i < collisionArray.length(); ++i) {
-            collisionArray.set(i, EMPTY);
-            locations.set(i, null);
-        }
-    }
+
 
 
     int locationToCollide(AtomicIntegerArray arr, int ourIdx, int pos) {

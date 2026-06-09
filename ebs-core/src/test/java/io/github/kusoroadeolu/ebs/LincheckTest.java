@@ -4,8 +4,6 @@ import org.jetbrains.lincheck.Lincheck;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -17,7 +15,7 @@ class LincheckTest {
     public void twoPushOnePopTest() {
         Lincheck.runConcurrentTest(() -> {
 
-            final ConcurrentStack<Integer> stack = new DECSStack<>(WaitStrategy.SPIN);
+            final ConcurrentStack<Integer> stack = new DECStack<>(WaitStrategy.SPIN);
             Thread t1 = new Thread(() -> stack.push(1));
             Thread t2 = new Thread(() -> stack.push(2));
             Thread t3 = new Thread(stack::pop);
@@ -43,7 +41,7 @@ class LincheckTest {
     @Test
     public void noDuplicatePops() {
         Lincheck.runConcurrentTest(() -> {
-            ConcurrentStack<Integer> stack = new DECSStack<>(WaitStrategy.SPIN);
+            ConcurrentStack<Integer> stack = new DECStack<>(WaitStrategy.SPIN);
             Set<Integer> popped = ConcurrentHashMap.newKeySet();
 
             stack.push(1); stack.push(2); stack.push(3);

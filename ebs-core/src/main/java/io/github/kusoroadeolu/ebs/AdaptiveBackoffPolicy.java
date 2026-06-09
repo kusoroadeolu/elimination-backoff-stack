@@ -1,5 +1,6 @@
 package io.github.kusoroadeolu.ebs;
 
+import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.locks.LockSupport;
@@ -74,11 +75,11 @@ public class AdaptiveBackoffPolicy {
             successWaitCount = 0;
         }
 
-        static final int MIN_SPIN = 100;
+        static final int MIN_SPIN = 200;
         static final int MAX_SPIN = 1000;
 
-        static final int MIN_PARK = 1;
-        static final int MAX_PARK = 10;
+        static final int MIN_PARK = 100;
+        static final int MAX_PARK = 500;
 
         static final int LIMIT = 5;
 
@@ -87,7 +88,7 @@ public class AdaptiveBackoffPolicy {
             if (++successWaitCount > LIMIT) {
                 wait = switch (strategy) {
                     case SPIN -> Math.min(wait * 2, MAX_SPIN);
-                    case PARK -> Math.min(wait + 2, MAX_PARK);
+                    case PARK -> Math.min(wait + 200, MAX_PARK);
                 };
 
                 successWaitCount = 0;
@@ -99,7 +100,7 @@ public class AdaptiveBackoffPolicy {
             if (++failWaitCount > LIMIT) {
                 wait = switch (strategy) {
                     case SPIN -> Math.max(wait / 2, MIN_SPIN);
-                    case PARK -> Math.max(wait - 1, MIN_PARK);
+                    case PARK -> Math.max(wait - 100, MIN_PARK);
                 };
                 failWaitCount = 0;
             }
@@ -112,7 +113,7 @@ public class AdaptiveBackoffPolicy {
                     int count = 0;
                     while (++count < wait) Thread.onSpinWait();
                 }
-                case PARK -> LockSupport.parkNanos(wait);
+                case PARK -> sleep(wait);
             }
         }
 
@@ -126,11 +127,11 @@ public class AdaptiveBackoffPolicy {
         private int successCount;
         private int failCount;
 
-        static final int MIN_SPIN = 100;
+        static final int MIN_SPIN = 200;
         static final int MAX_SPIN = 1000;
 
-        static final int MIN_PARK = 1;
-        static final int MAX_PARK = 10;
+        static final int MIN_PARK = 100;
+        static final int MAX_PARK = 500;
 
         static final int LIMIT = 5;
 
@@ -148,7 +149,7 @@ public class AdaptiveBackoffPolicy {
                     spinCount = Math.min(spinCount * 2, MAX_SPIN);
                     if (spinCount == MAX_SPIN) mode = WaitStrategy.PARK;
                 } else {
-                    parkNanos = Math.min(parkNanos + 2, MAX_PARK);
+                    parkNanos = Math.min(parkNanos + 100, MAX_PARK);
                 }
                 successCount = 0;
             }
@@ -157,12 +158,12 @@ public class AdaptiveBackoffPolicy {
         public void decreaseWait() {
             if (++failCount > LIMIT) {
                 if (mode == WaitStrategy.PARK) {
-                    parkNanos = Math.max(parkNanos - 1, MIN_PARK);
+                    parkNanos = Math.max(parkNanos - 100, MIN_PARK);
                     if (parkNanos == MIN_PARK) mode = WaitStrategy.SPIN;
                 } else {
                     spinCount = Math.max(spinCount / 2, MIN_SPIN);
                 }
-                successCount = 0;
+                failCount = 0;
             }
         }
 
@@ -171,7 +172,7 @@ public class AdaptiveBackoffPolicy {
                 int count = 0;
                 while (++count < spinCount) Thread.onSpinWait();
             } else {
-                LockSupport.parkNanos(parkNanos);
+                sleep(parkNanos);
             }
         }
     }
@@ -217,6 +218,15 @@ public class AdaptiveBackoffPolicy {
                     : start;
         }
 
+    }
+
+
+    static void sleep(int ns) {
+       try {
+           Thread.sleep(0, ns);
+       }catch (InterruptedException e) {
+           throw new RuntimeException(e);
+       }
     }
 }
 

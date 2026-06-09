@@ -8,13 +8,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /* Elimination stack
-* Benchmark                       (type)   Mode  Cnt   Score   Error   Units
-WaitPolicyBench.eightThreads   DEFAULT  thrpt   30  42.910 ± 2.781  ops/us
-WaitPolicyBench.eightThreads  ADAPTIVE  thrpt   30  48.853 ± 1.799  ops/us
-WaitPolicyBench.fourThreads    DEFAULT  thrpt   30  47.889 ± 1.851  ops/us
-WaitPolicyBench.fourThreads   ADAPTIVE  thrpt   30  47.379 ± 2.707  ops/us
-WaitPolicyBench.twoThreads     DEFAULT  thrpt   30  47.816 ± 2.168  ops/us
-WaitPolicyBench.twoThreads    ADAPTIVE  thrpt   30  35.786 ± 4.049  ops/us
+Benchmark                       (type)   Mode  Cnt   Score   Error   Units
+WaitPolicyBench.eightThreads  ADAPTIVE  thrpt   30  47.177 ± 2.209  ops/us
+WaitPolicyBench.eightThreads   DEFAULT  thrpt   30  47.755 ± 1.871  ops/us
+WaitPolicyBench.fourThreads   ADAPTIVE  thrpt   30  47.519 ± 1.551  ops/us
+WaitPolicyBench.fourThreads    DEFAULT  thrpt   30  47.626 ± 2.726  ops/us
+WaitPolicyBench.twoThreads    ADAPTIVE  thrpt   30  40.092 ± 1.022  ops/us
+WaitPolicyBench.twoThreads     DEFAULT  thrpt   30  48.282 ± 1.362  ops/us
 *
 *
 Benchmark                       (type)  Mode  Cnt  Score   Error  Units
@@ -28,13 +28,13 @@ WaitPolicyBench.twoThreads    ADAPTIVE  avgt   30  0.057 ± 0.003  us/op
 
 
 /* DECS Stack
-* Benchmark                       (type)   Mode  Cnt   Score   Error   Units
-WaitPolicyBench.eightThreads  ADAPTIVE  thrpt   30  31.063 ± 2.065  ops/us
-WaitPolicyBench.eightThreads   DEFAULT  thrpt   30  33.747 ± 2.677  ops/us
-WaitPolicyBench.fourThreads   ADAPTIVE  thrpt   30  32.845 ± 0.989  ops/us
-WaitPolicyBench.fourThreads    DEFAULT  thrpt   30  38.142 ± 0.856  ops/us
-WaitPolicyBench.twoThreads    ADAPTIVE  thrpt   30  32.154 ± 0.660  ops/us
-WaitPolicyBench.twoThreads     DEFAULT  thrpt   30  38.929 ± 1.626  ops/us
+Benchmark                       (type)   Mode  Cnt   Score   Error   Units
+WaitPolicyBench.eightThreads  ADAPTIVE  thrpt   30  28.934 ± 2.446  ops/us
+WaitPolicyBench.eightThreads   DEFAULT  thrpt   30  33.202 ± 1.613  ops/us
+WaitPolicyBench.fourThreads   ADAPTIVE  thrpt   30  28.831 ± 2.618  ops/us
+WaitPolicyBench.fourThreads    DEFAULT  thrpt   30  35.873 ± 1.709  ops/us
+WaitPolicyBench.twoThreads    ADAPTIVE  thrpt   30  31.477 ± 0.838  ops/us
+WaitPolicyBench.twoThreads     DEFAULT  thrpt   30  37.745 ± 0.537  ops/us
 * */
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
@@ -63,7 +63,7 @@ public class WaitPolicyBench {
 
     @Setup
     public void setup() {
-        stack = type.equals("ADAPTIVE") ? new EliminationStack<>(WaitPolicy.adaptive()) : new EliminationStack<>(WaitStrategy.PARK);
+        stack = type.equals("ADAPTIVE") ? new DECStack<>(WaitPolicy.adaptive()) : new DECStack<>(WaitStrategy.PARK);
     }
 
     @Threads(2)

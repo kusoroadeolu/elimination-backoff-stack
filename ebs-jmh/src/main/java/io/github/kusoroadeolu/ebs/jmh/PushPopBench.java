@@ -35,11 +35,17 @@ PushPopBench.twoThreads    MANES_ELIM  thrpt   30  42.943 ± 1.469  ops/us
 
 // DECS stack, worse thrpt than the elim stack but overall better than treiber and lock based
 
-/*
-* Benchmark                   Mode  Cnt   Score   Error   Units
-PushPopBench.eightThreads  thrpt   30  32.166 ± 1.891  ops/us
-PushPopBench.fourThreads   thrpt   30  31.783 ± 1.434  ops/us
-PushPopBench.twoThreads    thrpt   30  38.962 ± 0.883  ops/us
+/* SPIN
+Benchmark                  (type)   Mode  Cnt   Score   Error   Units
+PushPopBench.eightThreads    DECS  thrpt   30  15.357 ± 1.105  ops/us
+PushPopBench.fourThreads     DECS  thrpt   30  30.903 ± 2.179  ops/us
+PushPopBench.twoThreads      DECS  thrpt   30  32.140 ± 2.014  ops/us
+
+ADAPTIVE
+* Benchmark                  (type)   Mode  Cnt   Score   Error   Units
+PushPopBench.eightThreads    DECS  thrpt   30  35.192 ± 2.002  ops/us
+PushPopBench.fourThreads     DECS  thrpt   30  37.384 ± 0.880  ops/us
+PushPopBench.twoThreads      DECS  thrpt   30  33.017 ± 0.709  ops/us
 * */
 
 /* Latency (Park)
@@ -81,7 +87,7 @@ PushPopBench.twoThreads      ELIM  thrpt   30  40.352 ± 2.420  ops/us
 @Fork(3)
 public class PushPopBench {
     private ConcurrentStack<Integer> stack;
-    @Param({"ELIM", "DESC", "TREB", "MANES_ELIM"})
+    @Param({ "DECS", "ELIM", "MANES_ELIM", "TREB"})
     private String type;
 
     @State(Scope.Thread)
@@ -107,7 +113,7 @@ public class PushPopBench {
             case "ELIM" -> new EliminationStack<>(WaitStrategy.SPIN);
             case "MANES_ELIM" -> new ManesEliminationStack<>();
             case "TREB" -> new TreiberStack<>();
-            case "DECS" -> new DECSStack<>(WaitStrategy.SPIN);
+            case "DECS" -> new DECStack<>(WaitPolicy.adaptive());
             default -> throw new RuntimeException();
         };
     }

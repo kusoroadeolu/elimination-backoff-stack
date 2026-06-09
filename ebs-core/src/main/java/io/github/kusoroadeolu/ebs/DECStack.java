@@ -11,7 +11,7 @@ import java.util.concurrent.locks.LockSupport;
 
 import static io.github.kusoroadeolu.ebs.ConcurrentStack.Operation.POP;
 import static io.github.kusoroadeolu.ebs.ConcurrentStack.Operation.PUSH;
-import static io.github.kusoroadeolu.ebs.DECSStack.Status.*;
+import static io.github.kusoroadeolu.ebs.DECStack.Status.*;
 
 
 //Based on the paper https://arxiv.org/pdf/1106.6304 (Dynamic Elimination Combining Stack)
@@ -58,19 +58,19 @@ import static io.github.kusoroadeolu.ebs.DECSStack.Status.*;
  * 1. We can use an array based approach to build the thread node list rather than holding a reference to a next and last ref.
  * This conforms to the principle of spatial locality, doesn't mean better perf though
  * */
-public class DECSStack<T> implements ConcurrentStack<T>{
+public class DECStack<T> implements ConcurrentStack<T>{
     private final AtomicIntegerArray collisionArray;
     private final AtomicReferenceArray<ThreadNode<T>> locations;
     private final ThreadLocal<AdaptiveBackoffPolicy> policy;
     private static final int EMPTY = -1;
     private final MultiStack<T> stack;
 
-    public DECSStack(WaitPolicy policy) {
+    public DECStack(WaitPolicy policy) {
         var ncpu = Runtime.getRuntime().availableProcessors();
         this(ncpu, ncpu, policy);
     }
 
-    public DECSStack(int noThreads, int collisionArraySize, WaitPolicy p) {
+    public DECStack(int noThreads, int collisionArraySize, WaitPolicy p) {
         var counter = new AtomicInteger(0);
         stack = new MultiStack<>(); //A simple treiber stack
         collisionArray = new AtomicIntegerArray(collisionArraySize); //Reduce by half to increase collision probability
@@ -82,7 +82,7 @@ public class DECSStack<T> implements ConcurrentStack<T>{
         policy = ThreadLocal.withInitial(() -> new AdaptiveBackoffPolicy(p, counter.getAndIncrement(), collisionArraySize));
     }
 
-    public DECSStack(WaitStrategy strategy) {
+    public DECStack(WaitStrategy strategy) {
         var ncpu = Runtime.getRuntime().availableProcessors();
         this(ncpu, ncpu, new AdaptiveBackoffPolicy.DefaultWaitPolicy(strategy));
     }
@@ -118,8 +118,10 @@ public class DECSStack<T> implements ConcurrentStack<T>{
         var l = locations;
         var ca = collisionArray;
         var op = ourNode.operation;
-        
-        l.setRelease(idx, ourNode); //Should  last write immediately visible
+
+
+
+        l.setRelease(idx, ourNode);
 
 
         while (true) {
@@ -133,10 +135,11 @@ public class DECSStack<T> implements ConcurrentStack<T>{
                     //Try to make ourselves unavailable
                     if (l.compareAndSet(idx, ourNode, null)) {
                         //try to collide now
-                        if (collide(ourNode, theirNode, l)) break;
+                        if (collide(ourNode, theirNode, l)) break; //If collision fails, we try by scanning the entire array
                         else { //Else retry stack
+                            if (scanAndEliminate(ourNode, l)) return; //Don't increase our wait time as we succeeded through a linear scan
                             boolean succeed = op == PUSH ? s.multiPush(ourNode) : s.multiPop(ourNode);
-                            if (succeed) break;
+                            if (succeed) return;
                             rp.recordCollisionFailure(); //Failed to collide increase record range and decrease wait count
                             wp.decreaseWait();
                             l.setRelease(idx, ourNode);
@@ -146,7 +149,7 @@ public class DECSStack<T> implements ConcurrentStack<T>{
                     } else {
                         //If we can't make ourselves unavailable, another thread has collided with us, so we passive collide
                         if (tryFinishCollide(ourNode, l)) break;
-                        l.setRelease(idx, ourNode);
+                       l.setRelease(idx, ourNode);
                         continue;
                     }
 
@@ -166,9 +169,24 @@ public class DECSStack<T> implements ConcurrentStack<T>{
 
             boolean succeed = op == PUSH ? s.multiPush(ourNode) : s.multiPop(ourNode);
             if (succeed) return;
-            l.setRelease(idx, ourNode); //Re write our info
+            l.setRelease(idx, ourNode);
+
         }
+
         wp.increaseWait();
+    }
+
+    //Here we aren't visible to other threads so we're free to try and force collisions
+    boolean scanAndEliminate(ThreadNode<T> ours, AtomicReferenceArray<ThreadNode<T>> locations) {
+        int len = locations.length();
+        for (int i = 0; i < len; ++i) {
+            var theirNode = locations.getAcquire(i);
+            if (theirNode != null && i == theirNode.idx()) {
+                if (collide(ours, theirNode, locations)) return true;
+            }
+        }
+
+        return false;
     }
 
     int getCollisionIndex(AtomicIntegerArray arr, int ourIdx, int pos) {
@@ -204,15 +222,19 @@ public class DECSStack<T> implements ConcurrentStack<T>{
             int spins = 0;
             while (true) {
                 var s = ours.loStatus();
-                if (s == FINISHED) return true;
+                if (s == FINISHED) {
+
+                    return true;
+                }
                 else if (s == RETRY) {
                     ours.spInit(); //Plain write is alright since we're the only ones ever reading our own write
+
                     return false;
                 }
-
                 spins = backoffAfterXSpins(++spins);
             }
         }
+
     }
 
     int backoffAfterXSpins(int spins) {

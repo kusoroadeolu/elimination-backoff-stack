@@ -1,7 +1,5 @@
 package io.github.kusoroadeolu.ebs;
 
-import org.openjdk.jol.info.ClassLayout;
-
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 

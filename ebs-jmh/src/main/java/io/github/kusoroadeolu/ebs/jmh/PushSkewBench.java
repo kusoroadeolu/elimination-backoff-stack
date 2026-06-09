@@ -57,31 +57,51 @@ PushSkewBench.twoThreads      DESC  thrpt   30   8.662 ± 1.083  ops/us
 
 
 /*
-* Benchmark                       (type)   Mode  Cnt   Score   Error   Units
-PushSkewBench.eightThreads  MANES_ELIM  thrpt   30   9.326 ± 2.364  ops/us
-PushSkewBench.fourThreads   MANES_ELIM  thrpt   30  55.255 ± 6.710  ops/us
-PushSkewBench.twoThreads    MANES_ELIM  thrpt   30   5.659 ± 0.803  ops/us
+Benchmark                       (type)   Mode  Cnt    Score    Error   Units
+PushSkewBench.eightThreads        ELIM  thrpt   30   16.696 ±  5.997  ops/us
+PushSkewBench.eightThreads  MANES_ELIM  thrpt   30   16.341 ±  2.216  ops/us
+* PushSkewBench.twoThreads          ELIM  thrpt   30    9.187 ±  0.770  ops/us
+PushSkewBench.twoThreads    MANES_ELIM  thrpt   30   10.043 ±  1.040  ops/us
+* */
+
+/* SPIN
+* Benchmark                   (type)   Mode  Cnt   Score   Error   Units
+PushSkewBench.eightThreads    DESC  thrpt   30  19.659 ± 1.194  ops/us
+PushSkewBench.fourThreads     DESC  thrpt   30  13.653 ± 2.429  ops/us
+PushSkewBench.twoThreads      DESC  thrpt   30   7.603 ± 0.365  ops/us
+*
+* ADAPTIVE
+* Benchmark                  (type)   Mode  Cnt   Score   Error   Units
+PushPopBench.eightThreads    DECS  thrpt   30  15.357 ± 1.105  ops/us
+PushPopBench.fourThreads     DECS  thrpt   30  30.903 ± 2.179  ops/us
+PushPopBench.twoThreads      DECS  thrpt   30  32.140 ± 2.014  ops/us
+*
+
 * */
 
 public class PushSkewBench {
     private ConcurrentStack<Integer> stack;
-    @Param({"ELIM", "DESC","MANES_ELIM"})
+    @Param({ "DECS", "ELIM", "MANES_ELIM"})
     private String type;
 
     @State(Scope.Thread)
     public static class ThreadState {
         boolean pop = true;
-        static final AtomicInteger threadCounter = new AtomicInteger(1);
         @Setup
-        public void setup() {
-            pop = (threadCounter.getAndIncrement() % 4) == 0;
+        public void setup(BenchState bs) {
+            pop = (bs.threadCounter.getAndIncrement() % 4) == 0;
         }
     }
+
+    @State(Scope.Benchmark)
+    public static class BenchState {
+        AtomicInteger threadCounter = new AtomicInteger(1); // resets each iteration
+    }
+
 
     @TearDown(Level.Iteration)
     public void teardown() {
         while (stack.pop() != null);
-
     }
 
 
@@ -89,8 +109,8 @@ public class PushSkewBench {
     public void setup() {
         stack = switch (type) {
             case "MANES_ELIM" -> new ManesEliminationStack<>();
-            case "DESC" -> new DECSStack<>(WaitStrategy.SPIN);
-            case "TREB" -> new TreiberStack<>();
+            case "DECS" -> new DECStack<>(WaitPolicy.adaptive());
+            case "ELIM" -> new EliminationStack<>(WaitStrategy.SPIN);
             default -> throw new RuntimeException();
         };
 
