@@ -1,7 +1,7 @@
 package io.github.kusoroadeolu.ebs.stress;
 
 import io.github.kusoroadeolu.ebs.AdaptiveBackoffPolicy;
-import io.github.kusoroadeolu.ebs.DECStack;
+import io.github.kusoroadeolu.ebs.EliminationCombiningStack;
 import io.github.kusoroadeolu.ebs.WaitStrategy;
 import org.openjdk.jcstress.annotations.*;
 import org.openjdk.jcstress.infra.results.I_Result;
@@ -15,10 +15,10 @@ public class DecsStress {
     @Outcome(id = "0", expect = Expect.FORBIDDEN, desc = "Invariant violated")
     @State
     public static class NoLostWrites {
-        public final DECStack<Integer> stack;
+        public final EliminationCombiningStack<Integer> stack;
 
         public NoLostWrites() {
-            stack = new DECStack<>(4, 1, new AdaptiveBackoffPolicy.DefaultWaitPolicy(WaitStrategy.SPIN));
+            stack = new EliminationCombiningStack<>();
         }
 
 
@@ -57,11 +57,11 @@ public class DecsStress {
     @Outcome(id = "0", expect = Expect.ACCEPTABLE_INTERESTING, desc = "Pop ran before push")
     @State
     public static class PushPopCorrectness {
-        public final DECStack<Integer> stack;
+        public final EliminationCombiningStack<Integer> stack;
         public final Set<Integer> set;
 
         public PushPopCorrectness() {
-            stack = new DECStack<>(4, 1, new AdaptiveBackoffPolicy.DefaultWaitPolicy(WaitStrategy.SPIN));
+            stack = new EliminationCombiningStack<>();
             set = ConcurrentHashMap.newKeySet(2);
         }
 

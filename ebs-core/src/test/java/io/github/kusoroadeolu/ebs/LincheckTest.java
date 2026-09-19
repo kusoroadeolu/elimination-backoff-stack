@@ -15,7 +15,7 @@ class LincheckTest {
     public void twoPushOnePopTest() {
         Lincheck.runConcurrentTest(() -> {
 
-            final ConcurrentStack<Integer> stack = new DECStack<>(WaitStrategy.SPIN);
+            final ConcurrentStack<Integer> stack = new EliminationCombiningStack<>();
             Thread t1 = new Thread(() -> stack.push(1));
             Thread t2 = new Thread(() -> stack.push(2));
             Thread t3 = new Thread(stack::pop);
@@ -41,7 +41,7 @@ class LincheckTest {
     @Test
     public void noDuplicatePops() {
         Lincheck.runConcurrentTest(() -> {
-            ConcurrentStack<Integer> stack = new DECStack<>(WaitStrategy.SPIN);
+            ConcurrentStack<Integer> stack = new EliminationCombiningStack<>();
             Set<Integer> popped = ConcurrentHashMap.newKeySet();
 
             stack.push(1); stack.push(2); stack.push(3);
