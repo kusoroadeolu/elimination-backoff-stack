@@ -90,6 +90,7 @@ public class StackBench {
     private String type;
 
     private static final Integer TOKEN = 1;
+    private static final int FILL_SIZE = 10_000_000;
 
 
     @Setup
@@ -99,6 +100,10 @@ public class StackBench {
             case "EliminationCombining" -> new EliminationCombiningStack<>();
             default -> throw new RuntimeException();
         };
+
+        for (int i = 0; i < FILL_SIZE; ++i) {
+            stack.push(TOKEN);
+        }
     }
 
     @AuxCounters(AuxCounters.Type.OPERATIONS)
@@ -166,33 +171,33 @@ public class StackBench {
 }
 
 /*
-* ╭─ io.github.kusoroadeolu.ebs.jmh.StackBench.ratio_50_50 ──╮
-│  Type                 Role       Score  Error    Unit    │
-│  -------------------- ---------- ------ -------- ------  │
-│  EliminationCombining fifty_pop  23.501 ± 15.862 ops/us  │
-│  EliminationCombining fifty_push 9.917  ± 2.738  ops/us  │
-│  EliminationCombining popHit     8.834  ± 2.678  ops/us  │
-│  EliminationCombining popMiss    14.668 ± 14.089 ops/us  │
-│  EliminationCombining aggregate  33.419 ± 17.023 ops/us  │
-│  Manes                fifty_pop  23.643 ± 3.874  ops/us  │
-│  Manes                fifty_push 11.717 ± 0.333  ops/us  │
-│  Manes                popHit     11.765 ± 0.350  ops/us  │
-│  Manes                popMiss    11.969 ± 3.860  ops/us  │
-│  Manes                aggregate  35.360 ± 3.933  ops/us  │
-╰──────────────────────────────────────────────────────────╯
+╭─ io.github.kusoroadeolu.ebs.jmh.StackBench.ratio_50_50 ─╮
+│  Type                 Role       Score  Error   Unit    │
+│  -------------------- ---------- ------ ------- ------  │
+│  EliminationCombining fifty_pop  11.472 ± 4.150 ops/us  │
+│  EliminationCombining fifty_push 13.160 ± 2.332 ops/us  │
+│  EliminationCombining popHit     11.479 ± 4.153 ops/us  │
+│  EliminationCombining popMiss    0.000  ± 0.000 ops/us  │
+│  EliminationCombining aggregate  24.633 ± 6.470 ops/us  │
+│  Manes                fifty_pop  25.157 ± 7.360 ops/us  │
+│  Manes                fifty_push 11.847 ± 0.395 ops/us  │
+│  Manes                popHit     12.246 ± 0.500 ops/us  │
+│  Manes                popMiss    12.993 ± 7.706 ops/us  │
+│  Manes                aggregate  37.004 ± 7.453 ops/us  │
+╰─────────────────────────────────────────────────────────╯
 
 ╭──── io.github.kusoroadeolu.ebs.jmh.StackBench.ratio_75_25 ─────╮
 │  Type                 Role              Score  Error   Unit    │
 │  -------------------- ----------------- ------ ------- ------  │
-│  EliminationCombining popHit            10.065 ± 1.592 ops/us  │
-│  EliminationCombining popMiss           19.681 ± 6.285 ops/us  │
-│  EliminationCombining seventy_five_push 10.037 ± 1.591 ops/us  │
-│  EliminationCombining twenty_five_pop   29.744 ± 4.840 ops/us  │
-│  EliminationCombining aggregate         39.781 ± 3.514 ops/us  │
-│  Manes                popHit            9.834  ± 0.588 ops/us  │
-│  Manes                popMiss           8.664  ± 4.935 ops/us  │
-│  Manes                seventy_five_push 9.761  ± 0.554 ops/us  │
-│  Manes                twenty_five_pop   18.416 ± 4.989 ops/us  │
-│  Manes                aggregate         28.177 ± 5.073 ops/us  │
+│  EliminationCombining popHit            6.731  ± 1.699 ops/us  │
+│  EliminationCombining popMiss           0.000  ± 0.000 ops/us  │
+│  EliminationCombining seventy_five_push 11.086 ± 0.831 ops/us  │
+│  EliminationCombining twenty_five_pop   6.717  ± 1.697 ops/us  │
+│  EliminationCombining aggregate         17.803 ± 2.291 ops/us  │
+│  Manes                popHit            10.426 ± 0.870 ops/us  │
+│  Manes                popMiss           0.000  ± 0.000 ops/us  │
+│  Manes                seventy_five_push 10.979 ± 1.006 ops/us  │
+│  Manes                twenty_five_pop   10.374 ± 0.872 ops/us  │
+│  Manes                aggregate         21.353 ± 1.766 ops/us  │
 ╰────────────────────────────────────────────────────────────────╯
 * */

@@ -60,7 +60,6 @@ public class EliminationCombiningStack<T> implements ConcurrentStack<T>{
     private static final int MAX_STEPS = 8;
     private final int mask;
 
-
     public EliminationCombiningStack() {
         stack = new MultiStack<>(); //A simple treiber stack
         int arenaSize = ceilingNextPowerOfTwo(Runtime.getRuntime().availableProcessors());
@@ -95,12 +94,12 @@ public class EliminationCombiningStack<T> implements ConcurrentStack<T>{
         if (s.pop(ours)) return ours.node.value;
 
         int startIndex = ThreadLocalRandom.current().nextInt();
-
         for (;;) {
             if (scanAndEliminate(ours, arena) || awaitElimination(startIndex, ours) || s.multiPop(ours)) return ours.node.value;
         }
 
     }
+
 
 
     //Here we aren't visible to other threads so we're free to try and force collisions
@@ -144,6 +143,7 @@ public class EliminationCombiningStack<T> implements ConcurrentStack<T>{
             } else if (node != null && collide(ours, node, object)) return true;
         }
 
+
         return false;
     }
 
@@ -165,7 +165,7 @@ public class EliminationCombiningStack<T> implements ConcurrentStack<T>{
     }
 
     boolean awaitStatus(ThreadNode<T> ours) {
-        int spins = 0;
+        int step = 0;
         while (true) {
             var s = ours.laStatus();
             if (s == FINISHED) return true;
@@ -174,17 +174,7 @@ public class EliminationCombiningStack<T> implements ConcurrentStack<T>{
                 return false;
             }
 
-            spins = backoffAfterXSpins(++spins);
-        }
-    }
-
-    int backoffAfterXSpins(int spins) {
-        if (spins < 64) {
-            Thread.onSpinWait();
-            return ++spins;
-        } else {
-            Thread.yield();
-            return 0;
+            step = Backoff.snooze(step);
         }
     }
 
