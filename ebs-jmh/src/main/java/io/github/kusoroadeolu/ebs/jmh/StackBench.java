@@ -83,10 +83,10 @@ StackBench.twoThreads      ELIM  thrpt   30  40.352 ± 2.420  ops/us
 @State(Scope.Benchmark)
 @Warmup(iterations = 5, time = 1)
 @Measurement(iterations = 10, time = 1)
-@Fork(1)
+@Fork(2)
 public class StackBench {
     private ConcurrentStack<Integer> stack;
-    @Param({"EliminationCombining"})
+    @Param({"EliminationCombining", "Manes"})
     private String type;
 
     private static final Integer TOKEN = 1;

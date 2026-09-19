@@ -81,7 +81,7 @@ public class EliminationCombiningStack<T> implements ConcurrentStack<T>{
         int startIndex = ThreadLocalRandom.current().nextInt();
 
         for (;;) {
-            if (scanAndEliminate(ours, arena) || awaitElimination(startIndex, ours) || s.multiPush(ours)) return true;
+            if (scanAndEliminate(ours, arena, startIndex) || awaitElimination(startIndex, ours) || s.multiPush(ours)) return true;
         }
 
     }
@@ -95,7 +95,7 @@ public class EliminationCombiningStack<T> implements ConcurrentStack<T>{
 
         int startIndex = ThreadLocalRandom.current().nextInt();
         for (;;) {
-            if (scanAndEliminate(ours, arena) || awaitElimination(startIndex, ours) || s.multiPop(ours)) return ours.node.value;
+            if (scanAndEliminate(ours, arena, startIndex) || awaitElimination(startIndex, ours) || s.multiPop(ours)) return ours.node.value;
         }
 
     }
@@ -103,9 +103,11 @@ public class EliminationCombiningStack<T> implements ConcurrentStack<T>{
 
 
     //Here we aren't visible to other threads so we're free to try and force collisions
-    boolean scanAndEliminate(ThreadNode<T> ours, ArenaObject<T>[] arena) {
+    boolean scanAndEliminate(ThreadNode<T> ours, ArenaObject<T>[] arena, int start) {
+        int mask = this.mask;
         int length = mask + 1;
-        for (int index = 0; index < length; ++index) {
+        for (int step = 0; step < length; ++step) {
+            int index = (start + step) & mask;
             var object = arena[index];
             var theirs = object.laNode();
             if (theirs != null && collide(ours, theirs, object)) return true;
