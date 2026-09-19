@@ -81,7 +81,7 @@ public class EliminationCombiningStack<T> implements ConcurrentStack<T>{
         int startIndex = ThreadLocalRandom.current().nextInt();
 
         for (;;) {
-            if (scanAndEliminate(ours, arena, startIndex) || awaitElimination(startIndex, ours) || s.multiPush(ours)) return true;
+            if (scanAndEliminate(ours, arena, startIndex) || s.multiPush(ours) || awaitElimination(startIndex, ours) || s.multiPush(ours)) return true;
         }
 
     }
@@ -95,7 +95,7 @@ public class EliminationCombiningStack<T> implements ConcurrentStack<T>{
 
         int startIndex = ThreadLocalRandom.current().nextInt();
         for (;;) {
-            if (scanAndEliminate(ours, arena, startIndex) || awaitElimination(startIndex, ours) || s.multiPop(ours)) return ours.node.value;
+            if (scanAndEliminate(ours, arena, startIndex) || s.multiPop(ours) || awaitElimination(startIndex, ours) || s.multiPop(ours)) return ours.node.value;
         }
 
     }
@@ -352,6 +352,7 @@ public class EliminationCombiningStack<T> implements ConcurrentStack<T>{
 
         // Either atomic or not (similar to what multi push guarantees)
         public boolean multiPop(ThreadNode<T> node) {
+            int size = node.size();
 
             Node<T> head;
             var curr = node;
@@ -365,8 +366,6 @@ public class EliminationCombiningStack<T> implements ConcurrentStack<T>{
                 return true;
             }
 
-
-            int size = node.size();
 
 
             var sweep = head;
