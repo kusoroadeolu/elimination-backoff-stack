@@ -54,20 +54,23 @@ import static io.github.kusoroadeolu.ebs.EliminationCombiningStack.Status.*;
 public class EliminationCombiningStack<T> implements ConcurrentStack<T>{
     private final ArenaObject<T>[] arena;
     private final MultiStack<T> stack;
-    private static final int MAX_SPINS = 1024;
-    private static final int SPINS_PER_SLOT = 128;
-    private static final int BACKOFF_SPINS = 32;
+    private static final int NCPU = Runtime.getRuntime().availableProcessors();
+    static final int MAX_SPINS = (NCPU == 1) ? 0 : 2048;
+    static final int PROBE_DISTANCE = Math.min(4, NCPU);
+
+    static final int SPINS_PER_SLOT = (MAX_SPINS / PROBE_DISTANCE);
+    static final int BACKOFF_SPINS = MAX_SPINS / 5;
     private static final int MAX_STEPS = 8;
+    private static final int ARENA_LENGTH = ceilingNextPowerOfTwo(NCPU);
     private final int mask;
 
     public EliminationCombiningStack() {
         stack = new MultiStack<>(); //A simple treiber stack
-        int arenaSize = ceilingNextPowerOfTwo(Runtime.getRuntime().availableProcessors());
-        arena = new ArenaObject[arenaSize];
+        arena = new ArenaObject[ARENA_LENGTH];
 
-        for (int i = 0; i < arenaSize; ++i) arena[i] = new ArenaObject<>();
+        for (int i = 0; i < ARENA_LENGTH; ++i) arena[i] = new ArenaObject<>();
 
-        mask = arenaSize - 1;
+        mask = ARENA_LENGTH - 1;
     }
 
 

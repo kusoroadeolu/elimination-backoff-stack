@@ -109,7 +109,7 @@ public final class ManesEliminationStack<E> extends AbstractCollection<E> implem
     top = new PaddedAtomicReference<>();
     arena = new PaddedAtomicReference[ARENA_LENGTH];
     for (int i = 0; i < ARENA_LENGTH; i++) {
-      arena[i] = new PaddedAtomicReference<Object>();
+      arena[i] = new PaddedAtomicReference<>();
     }
   }
 
